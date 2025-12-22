@@ -3,30 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Translatio - Translation Studies Data Manager</title>
+    <title>Translatio - Translation Studies Data Lab</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,800;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-      /* Custom scrollbar for cleaner look */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f5f9; 
+        background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #cbd5e1; 
-        border-radius: 4px;
+        background: #e2e8f0; 
+        border-radius: 10px;
+        border: 3px solid white;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8; 
+        background: #cbd5e1; 
       }
       body {
         font-family: 'Inter', sans-serif;
+        font-size: 16px; 
       }
-      h1, h2, h3, .serif {
+      h1, h2, h3, h4, .serif {
         font-family: 'Crimson Pro', serif;
+      }
+      .animate-fadeIn {
+        animation: fadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .animate-slideUp {
+        animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(40px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      input, textarea {
+        transition: all 0.4s ease;
       }
     </style>
   <script type="importmap">
@@ -38,12 +56,13 @@
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
     "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
     "d3": "https://aistudiocdn.com/d3@^7.9.0",
+    "topojson-client": "https://aistudiocdn.com/topojson-client@^3.1.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-50 text-slate-900 antialiased">
+  <body class="bg-white text-slate-900 antialiased selection:bg-indigo-100 selection:text-indigo-900">
     <div id="root"></div>
   </body>
 </html>

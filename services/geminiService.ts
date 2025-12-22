@@ -1,97 +1,107 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { BibEntry, Gender } from "../types";
+import { BibEntry, Gender, ResearchBlueprint, AdvancedGraphMetrics, LayoutType } from "../types";
 
-// Helper to ensure we don't re-initialize unnecessarily
-let aiClient: GoogleGenAI | null = null;
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const getAiClient = () => {
-  if (!aiClient) {
-    if (!process.env.API_KEY) {
-      console.warn("API Key not found in environment variables");
-      // In a real app we might throw, but here we handle gracefully in UI
-      throw new Error("API Key missing");
+export const generateResearchBlueprint = async (prompt: string): Promise<ResearchBlueprint> => {
+  const ai = getAI();
+  const systemInstruction = `You are a Digital Humanities expert for Translation Studies. Design a data schema based on the research topic. Output JSON in English.`;
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: `Architect a project structure for the following research inquiry: "${prompt}". Suggest specific fields that would be valuable for statistical or network analysis.`,
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          projectScope: { type: Type.STRING },
+          suggestedSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                fieldName: { type: Type.STRING },
+                description: { type: Type.STRING },
+                analyticalUtility: { type: Type.STRING },
+                importance: { type: Type.STRING, enum: ['Critical', 'Optional'] }
+              },
+              required: ['fieldName', 'description', 'analyticalUtility', 'importance']
+            }
+          },
+          dataCleaningStrategy: { type: Type.STRING }
+        },
+        required: ['projectScope', 'suggestedSchema', 'dataCleaningStrategy']
+      }
     }
-    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  }
-  return aiClient;
+  });
+  return JSON.parse(response.text || "{}");
 };
 
-/**
- * Parses raw bibliographic text (citation) into a structured BibEntry object using Gemini.
- */
-export const parseBibliographicData = async (rawText: string): Promise<Partial<BibEntry>> => {
-  const ai = getAiClient();
-  
-  const systemInstruction = `
-    You are an expert bibliographer specializing in Translation Studies. 
-    Extract detailed bibliographic information from the provided text.
-    Infer gender based on names if not explicitly stated, but mark as UNKNOWN if unsure.
-    If exact years are missing, leave them null.
-  `;
-
+export const parseBibliographicData = async (rawText: string, blueprint?: ResearchBlueprint): Promise<Partial<BibEntry>> => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: `Extract data from this citation/text: "${rawText}"`,
+    model: "gemini-3-flash-preview",
+    contents: `Extract data from: "${rawText}"`,
     config: {
-      systemInstruction: systemInstruction,
+      systemInstruction: "Extract bibliographic data from archival source text. Output JSON.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           title: { type: Type.STRING },
-          originalTitle: { type: Type.STRING },
           publicationYear: { type: Type.INTEGER },
-          originalPublicationYear: { type: Type.INTEGER },
-          publisher: { type: Type.STRING },
-          city: { type: Type.STRING },
-          sourceLanguage: { type: Type.STRING },
-          targetLanguage: { type: Type.STRING },
-          author: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              gender: { type: Type.STRING, enum: [Gender.MALE, Gender.FEMALE, Gender.NON_BINARY, Gender.UNKNOWN] },
-              birthYear: { type: Type.INTEGER },
-              deathYear: { type: Type.INTEGER },
-              nationality: { type: Type.STRING }
-            }
-          },
-          translator: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              gender: { type: Type.STRING, enum: [Gender.MALE, Gender.FEMALE, Gender.NON_BINARY, Gender.UNKNOWN] },
-              birthYear: { type: Type.INTEGER },
-              deathYear: { type: Type.INTEGER },
-              nationality: { type: Type.STRING }
-            }
-          }
+          author: { type: Type.OBJECT, properties: { name: { type: Type.STRING } } },
+          translator: { type: Type.OBJECT, properties: { name: { type: Type.STRING } } },
+          city: { type: Type.STRING }
         }
       }
     }
   });
-
-  if (response.text) {
-    return JSON.parse(response.text);
-  }
-  throw new Error("Failed to parse data");
+  return JSON.parse(response.text || "{}");
 };
 
-/**
- * Generates an insight summary based on the dataset.
- */
 export const generateInsights = async (entries: BibEntry[]): Promise<string> => {
-    const ai = getAiClient();
-    
-    // Summarize data for the prompt (avoid sending huge JSON if not needed)
-    const summary = entries.map(e => 
-        `${e.author.name} (${e.sourceLanguage}) -> ${e.translator.name} (${e.targetLanguage}) by ${e.publisher} in ${e.publicationYear}`
-    ).join('\n');
-
+    const ai = getAI();
+    const dataSummary = entries.slice(0, 50).map(e => `- ${e.title} (${e.publicationYear}): ${e.author.name} translated by ${e.translator.name}`).join('\n');
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Analyze this translation bibliographic dataset and provide 3 key scholarly insights regarding circulation patterns, gender representation, or publisher influence.\n\nDataset:\n${summary}`,
+        model: "gemini-3-flash-preview",
+        contents: `Analyze this translation corpus and provide 3 deep academic observations for a translation studies scholar:\n\n${dataSummary}`,
+        config: {
+            systemInstruction: "You are a senior professor in translation history. Be academic, concise, and professional."
+        }
     });
-
-    return response.text || "No insights generated.";
+    return response.text || "";
 }
+
+export const suggestNetworkLayout = async (nodeCount: number, edgeCount: number, density: number): Promise<{ layout: LayoutType, reason: string }> => {
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Nodes: ${nodeCount}, Edges: ${edgeCount}. Density: ${density}.`,
+    config: {
+      systemInstruction: "Recommend a network layout strategy.",
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          layout: { type: Type.STRING, enum: ['force', 'circular', 'concentric', 'grid'] },
+          reason: { type: Type.STRING }
+        }
+      }
+    }
+  });
+  return JSON.parse(response.text || "{}");
+};
+
+export const interpretNetworkMetrics = async (metrics: AdvancedGraphMetrics): Promise<string> => {
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Metrics: ${JSON.stringify(metrics)}`,
+    config: {
+      systemInstruction: "Explain these network metrics for a social science researcher."
+    }
+  });
+  return response.text || "";
+};
