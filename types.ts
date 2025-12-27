@@ -11,11 +11,13 @@ export enum Gender {
 export type LayoutType = 'forceAtlas2' | 'fruchterman' | 'circular';
 export type NodeMetric = 'degree' | 'inDegree' | 'outDegree' | 'betweenness' | 'closeness' | 'eigenvector' | 'pageRank' | 'clustering' | 'modularity';
 export type NodeSizeMetric = NodeMetric | 'uniform';
+export type ColorMode = 'category' | 'community';
 
 export interface NetworkConfig {
   selectedNodeAttrs: string[];
   isDirected: boolean;
   edgeWeightBy: 'frequency' | 'none';
+  colorMode: ColorMode;
 }
 
 export interface ResearchBlueprint {
@@ -27,7 +29,6 @@ export interface ResearchBlueprint {
     importance: 'Critical' | 'Optional';
   }[];
   dataCleaningStrategy: string;
-  // 新增深度研究建议字段
   storageAdvice: string;
   methodology: string;
   visualizationStrategy: string;
@@ -82,6 +83,7 @@ export interface GraphNode extends SimulationNodeDatum {
   pageRank: number;
   clustering: number;
   modularity: number;
+  community: number;
 }
 
 export interface GraphLink extends SimulationLinkDatum<GraphNode> {
@@ -101,6 +103,7 @@ export interface AdvancedGraphMetrics {
   avgClustering: number;
   modularityScore: number;
   topNodes: Record<string, { name: string, score: number, type: string }[]>;
+  communities: { id: number, count: number, members: string[] }[];
 }
 
 export type ViewMode = 'list' | 'stats' | 'network' | 'blueprint' | 'map' | 'projects';

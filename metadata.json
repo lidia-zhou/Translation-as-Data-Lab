@@ -1,5 +1,5 @@
 {
-  "name": "Translatio - Translation Studies Data Manager",
+  "name": "TransData - Translation Studies Data Manager",
   "description": "A specialized bibliographic management and visualization tool for Translation Studies scholars. Features AI-powered data entry, network analysis of authors/translators, and circulation visualizations.",
   "requestFramePermissions": []
 }

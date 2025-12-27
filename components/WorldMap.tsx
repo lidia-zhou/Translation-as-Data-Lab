@@ -21,7 +21,6 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
 
   const flows = useMemo(() => {
     return data.map(e => {
-      // 检查 customMetadata 中是否有坐标信息，或者回退
       const sourceCoord = (e.customMetadata?.sourceCoord as any) || null;
       const targetCoord = (e.customMetadata?.targetCoord as any) || null;
       
@@ -35,21 +34,24 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
   useEffect(() => {
     if (!svgRef.current || !mapData) return;
     const svg = d3.select(svgRef.current);
-    const width = svgRef.current.clientWidth;
-    const height = svgRef.current.clientHeight;
+    const width = svgRef.current.parentElement?.clientWidth || svgRef.current.clientWidth;
+    const height = svgRef.current.parentElement?.clientHeight || svgRef.current.clientHeight;
+    
+    svg.attr("width", width).attr("height", height);
     svg.selectAll("*").remove();
 
     const g = svg.append("g");
-    const projection = d3.geoNaturalEarth1().scale(width / 6).translate([width / 2, height / 1.8]);
+    // 动态缩放和居中投影
+    const projection = d3.geoNaturalEarth1().scale(width / 5.5).translate([width / 2, height / 2]);
     const path = d3.geoPath().projection(projection);
 
     const zoom = d3.zoom<SVGSVGElement, any>().scaleExtent([1, 15]).on("zoom", e => g.attr("transform", e.transform));
     svg.call(zoom);
 
-    // Draw Ocean
+    // 绘制海洋背景
     g.append("path").datum({type: "Sphere"}).attr("fill", "#fcfcfd").attr("d", path as any);
 
-    // Draw Countries
+    // 绘制陆地
     g.selectAll(".country")
       .data(mapData.features)
       .join("path")
@@ -58,7 +60,6 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
       .attr("stroke-width", 0.5)
       .attr("d", path as any);
 
-    // Draw Static Arcs
     const arcLayer = g.append("g");
     const particlesLayer = g.append("g");
 
@@ -85,7 +86,6 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
           d3.select(e.target).attr("stroke-opacity", 0.2).attr("stroke-width", 1.5).attr("stroke", "#6366f1");
       });
 
-    // Particle Animation Loop
     const timer = d3.timer((elapsed) => {
       particlesLayer.selectAll(".particle").remove();
       
@@ -99,12 +99,12 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
         .attr("transform", d => {
           const t = (elapsed * 0.0005 + flows.indexOf(d) * 0.1) % 1;
           const interp = d3.geoInterpolate(d.source, d.target);
-          const pos = projection(interp(t));
+          const coord = interp(t);
+          const pos = projection(coord);
           return pos ? `translate(${pos[0]}, ${pos[1]})` : "translate(-100, -100)";
         });
     });
 
-    // Endpoint dots
     flows.forEach(f => {
       const s = projection(f.source);
       const t = projection(f.target);
@@ -118,7 +118,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
   }, [mapData, flows]);
 
   return (
-    <div className="w-full h-full bg-[#fcfcfd] relative overflow-hidden">
+    <div className="flex-1 w-full h-full bg-[#fcfcfd] relative overflow-hidden">
       <svg ref={svgRef} className="w-full h-full"></svg>
       {hoverInfo && (
         <div className="absolute top-10 left-10 bg-white/95 backdrop-blur-2xl p-8 rounded-[2rem] shadow-2xl border border-slate-100 animate-fadeIn z-50 space-y-3">

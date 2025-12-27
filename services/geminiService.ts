@@ -1,8 +1,38 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { BibEntry, Gender, ResearchBlueprint, AdvancedGraphMetrics, LayoutType } from "../types";
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Audio decoding helper
+const decode = (base64: string) => {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+};
+
+const decodeAudioData = async (
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> => {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+};
 
 export const geocodeLocation = async (locationName: string): Promise<[number, number] | null> => {
   if (!locationName) return null;
@@ -31,12 +61,6 @@ export const generateResearchBlueprint = async (prompt: string): Promise<Researc
   const ai = getAI();
   const systemInstruction = `你是一位世界级的数字人文专家，专精于翻译史研究。
   你的任务是根据用户的研究课题，设计一套完整的科研工作流方案。
-  你需要提供：
-  1. 需要收集的数据变量及其在SNA分析中的作用。
-  2. 数据存储格式与结构建议。
-  3. 数据清洗与规范化策略（例如异名处理）。
-  4. 分析方法论（如中介分析、社会翻译学网络）。
-  5. 建议的可视化方案及其学术意义。
   请使用中文回复。`;
 
   const response = await ai.models.generateContent({
@@ -75,49 +99,104 @@ export const generateResearchBlueprint = async (prompt: string): Promise<Researc
   return JSON.parse(response.text || "{}");
 };
 
-export const parseBibliographicData = async (rawText: string, blueprint?: ResearchBlueprint): Promise<Partial<BibEntry>> => {
+export const generateTutorialScript = async (project: any): Promise<{ title: string, content: string }[]> => {
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview",
+        contents: `针对以下翻译研究项目生成一段4个章节的教程脚本。
+        项目名: ${project.name}。
+        第一章：欢迎与蓝图定义。
+        第二章：著录数据管理。
+        第三章：社会网络分析 (SNA) 实验室。
+        第四章：全球流转可视化。
+        请用学术且亲切的口吻。`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        content: { type: Type.STRING }
+                    },
+                    required: ["title", "content"]
+                }
+            }
+        }
+    });
+    return JSON.parse(response.text || "[]");
+};
+
+export const speakTutorialPart = async (text: string, voice: string = 'Zephyr'): Promise<AudioBuffer | null> => {
+    const ai = getAI();
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: `用稳重且富有洞察力的声音朗读: ${text}` }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: voice },
+                    },
+                },
+            },
+        });
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (!base64Audio) return null;
+
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        return await decodeAudioData(decode(base64Audio), audioCtx, 24000, 1);
+    } catch (e) {
+        console.error("TTS generation failed", e);
+        return null;
+    }
+};
+
+export const generateAtmosphericVideo = async (prompt: string): Promise<string | null> => {
+    const ai = getAI();
+    try {
+        let operation = await ai.models.generateVideos({
+            model: 'veo-3.1-fast-generate-preview',
+            prompt: prompt,
+            config: {
+                numberOfVideos: 1,
+                resolution: '720p',
+                aspectRatio: '16:9'
+            }
+        });
+        while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            operation = await ai.operations.getVideosOperation({ operation: operation });
+        }
+        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+        return downloadLink ? `${downloadLink}&key=${process.env.API_KEY}` : null;
+    } catch (e) {
+        console.error("Video generation failed", e);
+        return null;
+    }
+};
+
+export const parseBibliographicData = async (rawText: string): Promise<Partial<BibEntry>> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Extract data: "${rawText}"`,
     config: {
       systemInstruction: "Extract bibliographic metadata from messy academic notes. Output JSON.",
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          publicationYear: { type: Type.INTEGER },
-          author: { type: Type.OBJECT, properties: { name: { type: Type.STRING } } },
-          translator: { type: Type.OBJECT, properties: { name: { type: Type.STRING } } },
-          city: { type: Type.STRING }
-        }
-      }
+      responseMimeType: "application/json"
     }
   });
   return JSON.parse(response.text || "{}");
 };
 
-export const suggestNetworkConfig = async (metrics: AdvancedGraphMetrics, blueprint: ResearchBlueprint | null): Promise<{ layout: string, metric: string, focusNodes: string[], reasoning: string }> => {
+export const suggestNetworkConfig = async (metrics: AdvancedGraphMetrics, blueprint: ResearchBlueprint | null): Promise<any> => {
   const ai = getAI();
-  const researchContext = blueprint ? `The scholar is researching: ${blueprint.projectScope}.` : "The scholar is exploring general translation networks.";
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `${researchContext} Current Network Metrics: ${JSON.stringify(metrics)}. Suggest visualization settings in JSON.`,
-    config: {
-      systemInstruction: "Suggest the best Gephi-style layout (forceAtlas2, fruchterman, or circular) and primary metric (betweenness, pageRank, or eigenvector) to reveal hidden power dynamics in translation history. Output JSON only.",
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          layout: { type: Type.STRING },
-          metric: { type: Type.STRING },
-          focusNodes: { type: Type.ARRAY, items: { type: Type.STRING } },
-          reasoning: { type: Type.STRING }
-        },
-        required: ["layout", "metric", "reasoning", "focusNodes"]
-      }
-    }
+    contents: `Suggest visualization settings in JSON for: ${JSON.stringify(metrics)}`,
+    config: { responseMimeType: "application/json" }
   });
   return JSON.parse(response.text || "{}");
 };
@@ -127,24 +206,16 @@ export const interpretNetworkMetrics = async (metrics: AdvancedGraphMetrics): Pr
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Interpret results for a scholar: ${JSON.stringify(metrics)}`,
-    config: {
-      systemInstruction: `You are a sociologist of translation. 
-      Use terms like "Betweenness (中介性)", "Closeness (紧密性)", and "Prestige (声望)". 
-      Explain what density and global clustering mean for cultural flow. Output in Chinese.`
-    }
   });
   return response.text || "";
 };
 
 export const generateInsights = async (entries: BibEntry[]): Promise<string> => {
     const ai = getAI();
-    const dataSummary = entries.slice(0, 50).map(e => `- ${e.title}: ${e.author.name} (Author) & ${e.translator.name} (Translator)`).join('\n');
+    const dataSummary = entries.slice(0, 30).map(e => `- ${e.title}`).join('\n');
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Analyze these translation records:\n\n${dataSummary}`,
-        config: {
-            systemInstruction: "You are a senior translation studies scholar. Provide 3 deep observations in Chinese."
-        }
     });
     return response.text || "";
 }

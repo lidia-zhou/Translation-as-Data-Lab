@@ -1,11 +1,25 @@
 
 import { BibEntry, Gender } from "./types";
 
-/**
- * 提取自 DGLAB ( Direção-Geral do Livro, dos Arquivos e das Bibliotecas) 
- * 葡萄牙文学资助外译名录，覆盖安哥拉、莫桑比克、葡萄牙、佛得角作家。
- * 为增强网络效果，重点录入翻译了多部作品的“枢纽译者”和“枢纽出版商”。
- */
+export const SAMPLE_TUTORIAL_SCRIPT = [
+    {
+        title: "欢迎来到 Translatio 实验室",
+        content: "您正在查看的是基于 DGLAB 官方资助名录的样本项目。这个平台专为翻译研究学者设计，旨在将枯燥的著录数据转化为生动的学术洞察。让我们开始探索吧。"
+    },
+    {
+        title: "研究蓝图：定义您的视野",
+        content: "在‘Blueprint’选项卡中，AI 会根据您的研究课题建议数据架构。例如本项目关注的是‘社会翻译学’路径，建议您重点采集资助机构与书籍流派，以分析权力与制度的中介作用。"
+    },
+    {
+        title: "网络实验室：寻找枢纽节点",
+        content: "进入‘Network Lab’。通过‘社区检测’功能，您可以发现译者、作者与出版社之间形成的非正式‘文化圈’。那些在中心位置的节点，往往就是决定翻译流动方向的关键中介。"
+    },
+    {
+        title: "全球流转：可视化地理脉络",
+        content: "最后，‘Global Map’将为您揭示文本在地理空间上的跨国迁徙。您可以直观地看到葡萄牙文学是如何从里斯本出发，流向伦敦、纽约乃至东京的出版市场。"
+    }
+];
+
 export const SAMPLE_ENTRIES: BibEntry[] = [
     // --- Michael Kegler (德语区核心枢纽) ---
     {
@@ -62,7 +76,7 @@ export const SAMPLE_ENTRIES: BibEntry[] = [
     },
     {
         id: "dglab-mk5",
-        title: "Ein Dasein aus Papier",
+        title: "Ein Dasein aus Paper",
         publicationYear: 2021,
         author: { name: "Al Berto", gender: Gender.MALE },
         translator: { name: "Michael Kegler", gender: Gender.MALE },
@@ -277,86 +291,5 @@ export const SAMPLE_ENTRIES: BibEntry[] = [
         sourceLanguage: "Portuguese",
         targetLanguage: "French",
         customMetadata: { "Genre": "Infantojuvenil", "Apoios": "DGLAB", "sourceCoord": [-8.4115, 40.2033], "targetCoord": [2.3522, 48.8566] }
-    },
-
-    // --- 多元语言扩张 ---
-    {
-        id: "dglab-ex1",
-        title: "La visión de las plantas",
-        publicationYear: 2023,
-        author: { name: "Djaimilia Pereira de Almeida", gender: Gender.FEMALE },
-        translator: { name: "Bárbara Belloc", gender: Gender.FEMALE },
-        publisher: "Edhasa",
-        originalCity: "Luanda",
-        city: "Buenos Aires",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Spanish",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "DGLAB; Camões IP", "sourceCoord": [13.2345, -8.8390], "targetCoord": [-58.3816, -34.6037] }
-    },
-    {
-        id: "dglab-ex2",
-        title: "Im Auge der Pflanzen",
-        publicationYear: 2022,
-        author: { name: "Djaimilia Pereira de Almeida", gender: Gender.FEMALE },
-        translator: { name: "Barbara Mesquita", gender: Gender.FEMALE },
-        publisher: "Unionsverlag",
-        originalCity: "Luanda",
-        city: "Zurich",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "German",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "DGLAB; Camões IP", "sourceCoord": [13.2345, -8.8390], "targetCoord": [8.5417, 47.3769] }
-    },
-    {
-        id: "dglab-ex3",
-        title: "L'oiseau rare",
-        publicationYear: 2000,
-        author: { name: "Almeida Faria", gender: Gender.MALE },
-        translator: { name: "n.d.", gender: Gender.UNKNOWN },
-        publisher: "L'escampette",
-        originalCity: "Montemor",
-        city: "Chauvigny",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "French",
-        customMetadata: { "Genre": "Fiction", "Apoios": "n.d.", "sourceCoord": [-8.2144, 38.6449], "targetCoord": [0.6471, 46.5684] }
-    },
-    // --- 增加更多具有社群聚集效应的重复条目 ---
-    {
-        id: "dglab-rep1",
-        title: "A boneca de Kokoschka",
-        publicationYear: 2015,
-        author: { name: "Afonso Cruz", gender: Gender.MALE },
-        translator: { name: "Dean Trdak", gender: Gender.MALE },
-        publisher: "Ljevak",
-        originalCity: "Figueira da Foz",
-        city: "Zagreb",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Croatian",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "DGLAB", "sourceCoord": [-8.8576, 40.1501], "targetCoord": [15.9819, 45.8150] }
-    },
-    {
-        id: "dglab-rep2",
-        title: "Jesus drak ol",
-        publicationYear: 2022,
-        author: { name: "Afonso Cruz", gender: Gender.MALE },
-        translator: { name: "Ole Eistrup", gender: Gender.MALE },
-        publisher: "Jensen & Dalgaard",
-        originalCity: "Figueira da Foz",
-        city: "Copenhagen",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Danish",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "DGLAB", "sourceCoord": [-8.8576, 40.1501], "targetCoord": [12.5683, 55.6761] }
-    },
-    {
-        id: "dglab-rep3",
-        title: "Kokoschka babája",
-        publicationYear: 2014,
-        author: { name: "Afonso Cruz", gender: Gender.MALE },
-        translator: { name: "Bense Mónika", gender: Gender.FEMALE },
-        publisher: "Typotex",
-        originalCity: "Figueira da Foz",
-        city: "Budapest",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Hungarian",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "n.d.", "sourceCoord": [-8.8576, 40.1501], "targetCoord": [19.0402, 47.4979] }
     }
 ];
