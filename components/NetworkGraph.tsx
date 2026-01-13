@@ -38,11 +38,10 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
   });
 
   const [sizeBy, setSizeBy] = useState<NodeSizeMetric>('degree');
-  const [minSize, setMinSize] = useState(12);
-  const [maxSize, setMaxSize] = useState(60);
+  const [minSize, setMinSize] = useState(15);
+  const [maxSize, setMaxSize] = useState(70);
   const [showLabels, setShowLabels] = useState(true);
 
-  // Resize handler
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(entries => {
@@ -126,7 +125,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
       return { source: parts[0], target: parts[1], weight: obj.weight, type: obj.type };
     });
 
-    // Basic Degree Calculation
     const nodeToIndex = new Map(nodeList.map((n, i) => [n.id, i]));
     linkList.forEach(l => {
       const sId = typeof l.source === 'string' ? l.source : l.source.id;
@@ -151,22 +149,22 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
     svg.attr("width", dimensions.width).attr("height", dimensions.height);
 
     const g = svg.append("g");
-    const zoom = d3.zoom<SVGSVGElement, any>().scaleExtent([0.05, 10]).on("zoom", (e) => g.attr("transform", e.transform));
+    const zoom = d3.zoom<SVGSVGElement, any>().scaleExtent([0.05, 12]).on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
 
-    const centerX = (dimensions.width - (isPanelOpen ? 420 : 0)) / 2;
+    const centerX = (dimensions.width - (isPanelOpen ? 380 : 0)) / 2;
     const centerY = dimensions.height / 2;
 
     const sim = d3.forceSimulation(graphData.nodes as any)
-        .force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(150))
-        .force("charge", d3.forceManyBody().strength(-1200))
+        .force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(200))
+        .force("charge", d3.forceManyBody().strength(-1500))
         .force("center", d3.forceCenter(centerX, centerY))
-        .force("collide", d3.forceCollide().radius(d => 10 + (d as any).degree * 2 + 10));
+        .force("collide", d3.forceCollide().radius(d => 15 + (d as any).degree * 2.5 + 15));
 
     const link = g.append("g").selectAll("line").data(graphData.links).join("line")
       .attr("stroke", d => EDGE_COLORS[d.type])
-      .attr("stroke-opacity", 0.35)
-      .attr("stroke-width", d => Math.sqrt(d.weight) * 2.5);
+      .attr("stroke-opacity", 0.4)
+      .attr("stroke-width", d => Math.sqrt(d.weight) * 3);
 
     const node = g.append("g").selectAll("g").data(graphData.nodes).join("g")
       .call(d3.drag<any, any>()
@@ -184,15 +182,15 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
     node.append("circle")
       .attr("r", d => getRadius(d))
       .attr("fill", d => CATEGORY_COLORS[availableAttributes.findIndex(a => a.id === d.group) % 10])
-      .attr("stroke", "#fff").attr("stroke-width", 2.5)
-      .attr("class", "cursor-pointer hover:stroke-indigo-500 transition-all shadow-lg")
+      .attr("stroke", "#fff").attr("stroke-width", 3)
+      .attr("class", "cursor-pointer hover:stroke-indigo-500 transition-all shadow-xl")
       .on("click", (e, d) => { e.stopPropagation(); setSelectedNode(d); });
 
     if (showLabels) {
       node.append("text")
-        .attr("dy", d => getRadius(d) + 20).attr("text-anchor", "middle")
+        .attr("dy", d => getRadius(d) + 25).attr("text-anchor", "middle")
         .text(d => d.name)
-        .attr("class", "text-[10px] font-bold fill-slate-500 pointer-events-none serif");
+        .attr("class", "text-[11px] font-bold fill-slate-500 pointer-events-none serif");
     }
 
     sim.on("tick", () => {
@@ -217,48 +215,48 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
       <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing"></svg>
       
       {/* Edge Legend */}
-      <div className="absolute bottom-10 left-10 flex flex-col gap-3 bg-white/80 backdrop-blur-md p-6 rounded-[2rem] border border-slate-100 shadow-xl z-40">
-        <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Relationship Types</h5>
+      <div className="absolute bottom-12 left-12 flex flex-col gap-4 bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] border border-slate-100 shadow-2xl z-40">
+        <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Relationship Types / 关系界定</h5>
         {(Object.entries(EDGE_COLORS) as [EdgeType, string][]).map(([type, color]) => (
-            <button key={type} onClick={() => toggleEdgeType(type)} className={`flex items-center gap-3 transition-opacity ${config.enabledEdgeTypes.includes(type) ? 'opacity-100' : 'opacity-20'}`}>
-                <div className="w-6 h-1 rounded-full" style={{ backgroundColor: color }}></div>
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-600">{type}</span>
+            <button key={type} onClick={() => toggleEdgeType(type)} className={`flex items-center gap-4 transition-all hover:scale-105 ${config.enabledEdgeTypes.includes(type) ? 'opacity-100' : 'opacity-20'}`}>
+                <div className="w-8 h-1.5 rounded-full" style={{ backgroundColor: color }}></div>
+                <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-600">{type}</span>
             </button>
         ))}
       </div>
 
       {/* Control Panel */}
-      <div className={`absolute top-0 right-0 h-full w-[420px] bg-white/95 backdrop-blur-2xl border-l border-slate-100 shadow-2xl transition-transform duration-500 z-50 flex flex-col ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`absolute top-0 right-0 h-full w-[380px] bg-white/95 backdrop-blur-2xl border-l border-slate-100 shadow-2xl transition-transform duration-500 z-50 flex flex-col ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex bg-slate-50/50 border-b border-slate-100 p-2 shrink-0">
             {[{id:'topology',label:'Topology'},{id:'viz',label:'Viz'},{id:'sna',label:'Analysis'}].map(t => (
-                <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 py-4 text-[8px] font-black uppercase tracking-[0.2em] transition-all rounded-xl ${activeTab === t.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 py-5 text-[10px] font-black uppercase tracking-[0.2em] transition-all rounded-xl ${activeTab === t.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                     {t.label}
                 </button>
             ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-10 space-y-12 custom-scrollbar">
             {activeTab === 'topology' && (
-                <div className="space-y-8 animate-fadeIn">
-                    <section className="space-y-4">
-                        <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Node Attributes / 节点属性</h4>
-                        <div className="flex flex-wrap gap-2">
+                <div className="space-y-10 animate-fadeIn">
+                    <section className="space-y-5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Node Entities / 节点属性</h4>
+                        <div className="flex flex-wrap gap-2.5">
                             {availableAttributes.map(attr => (
                                 <button key={attr.id} onClick={() => {
                                     const next = config.selectedNodeAttrs.includes(attr.id) ? config.selectedNodeAttrs.filter(x => x !== attr.id) : [...config.selectedNodeAttrs, attr.id];
                                     setConfig({...config, selectedNodeAttrs: next});
-                                }} className={`px-4 py-2 rounded-full text-[10px] font-bold border transition-all ${config.selectedNodeAttrs.includes(attr.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                                }} className={`px-5 py-2.5 rounded-full text-[11px] font-bold border transition-all ${config.selectedNodeAttrs.includes(attr.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
                                     {attr.label}
                                 </button>
                             ))}
                         </div>
                     </section>
-                    <section className="space-y-4">
-                        <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Graph Settings / 图谱设置</h4>
-                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                           <span className="text-[10px] font-bold text-slate-600 uppercase">Directed / 有向图</span>
-                           <button onClick={() => setConfig({...config, isDirected: !config.isDirected})} className={`w-12 h-6 rounded-full transition-colors relative ${config.isDirected ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.isDirected ? 'left-7' : 'left-1'}`}></div>
+                    <section className="space-y-5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Graph Properties / 图谱属性</h4>
+                        <div className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem]">
+                           <span className="text-[11px] font-bold text-slate-600 uppercase">Directed Graph / 有向图</span>
+                           <button onClick={() => setConfig({...config, isDirected: !config.isDirected})} className={`w-14 h-7 rounded-full transition-colors relative ${config.isDirected ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${config.isDirected ? 'left-8' : 'left-1'}`}></div>
                            </button>
                         </div>
                     </section>
@@ -266,32 +264,32 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
             )}
 
             {activeTab === 'viz' && (
-                <div className="space-y-8 animate-fadeIn">
-                    <section className="space-y-4">
-                        <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Node Sizing / 节点大小</h4>
-                        <select value={sizeBy} onChange={e => setSizeBy(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl border-none text-[10px] font-bold uppercase outline-none shadow-inner text-indigo-600">
-                           <option value="uniform">Uniform / 统一</option>
-                           <option value="degree">Degree / 度中心性</option>
+                <div className="space-y-10 animate-fadeIn">
+                    <section className="space-y-5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Node Scaling / 节点规模</h4>
+                        <select value={sizeBy} onChange={e => setSizeBy(e.target.value as any)} className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none text-[11px] font-bold uppercase outline-none shadow-inner text-indigo-600">
+                           <option value="uniform">Uniform / 统一大小</option>
+                           <option value="degree">Total Degree / 度中心性</option>
                            <option value="inDegree">In-Degree / 入度</option>
                            <option value="outDegree">Out-Degree / 出度</option>
                         </select>
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                              <label className="text-[8px] font-black uppercase text-slate-300">Min Size</label>
-                              <input type="range" min="5" max="30" value={minSize} onChange={e => setMinSize(parseInt(e.target.value))} className="w-full accent-indigo-600" />
+                        <div className="grid grid-cols-2 gap-6">
+                           <div className="space-y-3">
+                              <label className="text-[10px] font-black uppercase text-slate-300">Min Size</label>
+                              <input type="range" min="10" max="40" value={minSize} onChange={e => setMinSize(parseInt(e.target.value))} className="w-full accent-indigo-600" />
                            </div>
-                           <div className="space-y-2">
-                              <label className="text-[8px] font-black uppercase text-slate-300">Max Size</label>
-                              <input type="range" min="30" max="100" value={maxSize} onChange={e => setMaxSize(parseInt(e.target.value))} className="w-full accent-indigo-600" />
+                           <div className="space-y-3">
+                              <label className="text-[10px] font-black uppercase text-slate-300">Max Size</label>
+                              <input type="range" min="40" max="120" value={maxSize} onChange={e => setMaxSize(parseInt(e.target.value))} className="w-full accent-indigo-600" />
                            </div>
                         </div>
                     </section>
-                    <section className="space-y-4">
-                        <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Labels / 标签</h4>
-                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                           <span className="text-[10px] font-bold text-slate-600 uppercase">Show Labels / 显示标签</span>
-                           <button onClick={() => setShowLabels(!showLabels)} className={`w-12 h-6 rounded-full transition-colors relative ${showLabels ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${showLabels ? 'left-7' : 'left-1'}`}></div>
+                    <section className="space-y-5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Visual Helpers / 视觉辅助</h4>
+                        <div className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem]">
+                           <span className="text-[11px] font-bold text-slate-600 uppercase">Show Labels / 显示标签</span>
+                           <button onClick={() => setShowLabels(!showLabels)} className={`w-14 h-7 rounded-full transition-colors relative ${showLabels ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${showLabels ? 'left-8' : 'left-1'}`}></div>
                            </button>
                         </div>
                     </section>
@@ -299,18 +297,18 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
             )}
 
             {activeTab === 'sna' && (
-                <div className="space-y-8 animate-fadeIn">
-                    <section className="space-y-4">
-                        <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Centrality Ranking / 排名</h4>
-                        <div className="space-y-3">
-                           {graphData.nodes.sort((a,b) => b.degree - a.degree).slice(0, 10).map((n, i) => (
-                              <div key={n.id} className="flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                                 <span className="text-xs font-black text-slate-300">#{i+1}</span>
-                                 <div className="flex-1">
-                                    <p className="text-[10px] font-bold text-slate-800 truncate">{n.name}</p>
-                                    <p className="text-[8px] uppercase text-indigo-400 font-black">{n.group}</p>
+                <div className="space-y-10 animate-fadeIn">
+                    <section className="space-y-5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Degree Centrality / 活跃度排名</h4>
+                        <div className="space-y-4">
+                           {graphData.nodes.sort((a,b) => b.degree - a.degree).slice(0, 15).map((n, i) => (
+                              <div key={n.id} className="flex items-center gap-5 p-5 bg-white border border-slate-100 rounded-[1.5rem] shadow-sm hover:shadow-md transition-shadow">
+                                 <span className="text-sm font-black text-slate-300">#{i+1}</span>
+                                 <div className="flex-1 min-w-0">
+                                    <p className="text-[12px] font-bold text-slate-800 truncate">{n.name}</p>
+                                    <p className="text-[10px] uppercase text-indigo-400 font-black tracking-tighter">{n.group}</p>
                                  </div>
-                                 <span className="text-xs font-bold text-slate-400">{n.degree}</span>
+                                 <span className="text-sm font-bold text-slate-400">{n.degree}</span>
                               </div>
                            ))}
                         </div>
@@ -320,28 +318,28 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
         </div>
 
         {selectedNode && (
-            <div className="m-8 p-8 bg-slate-900 text-white rounded-[3rem] shadow-2xl space-y-5 animate-slideUp relative flex-shrink-0 overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-3xl -mr-16 -mt-16"></div>
-                <button onClick={() => setSelectedNode(null)} className="absolute top-6 right-8 text-3xl font-light hover:text-rose-400 transition-colors leading-none z-10">&times;</button>
-                <div className="space-y-1 relative z-10">
-                    <p className="text-[8px] uppercase text-indigo-400 tracking-widest font-black">{selectedNode.group}</p>
-                    <h4 className="text-2xl font-bold serif leading-tight pr-10">{selectedNode.name}</h4>
+            <div className="m-8 p-10 bg-slate-900 text-white rounded-[3.5rem] shadow-2xl space-y-6 animate-slideUp relative flex-shrink-0 overflow-hidden">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/20 blur-3xl -mr-20 -mt-20"></div>
+                <button onClick={() => setSelectedNode(null)} className="absolute top-8 right-10 text-4xl font-light hover:text-rose-400 transition-colors leading-none z-10">&times;</button>
+                <div className="space-y-2 relative z-10">
+                    <p className="text-[10px] uppercase text-indigo-400 tracking-widest font-black">{selectedNode.group}</p>
+                    <h4 className="text-3xl font-bold serif leading-tight pr-12">{selectedNode.name}</h4>
                 </div>
-                <div className="grid grid-cols-2 gap-3 relative z-10">
-                    <div className="bg-white/5 p-4 rounded-2xl text-center">
-                        <p className="text-[7px] uppercase text-slate-500 mb-1 tracking-widest">Tot. Degree</p>
-                        <p className="text-lg font-bold serif text-slate-300">{selectedNode.degree}</p>
+                <div className="grid grid-cols-2 gap-4 relative z-10">
+                    <div className="bg-white/5 p-5 rounded-[1.5rem] text-center">
+                        <p className="text-[9px] uppercase text-slate-500 mb-2 tracking-widest">Tot. Degree</p>
+                        <p className="text-2xl font-bold serif text-slate-300">{selectedNode.degree}</p>
                     </div>
-                    <div className="bg-white/5 p-4 rounded-2xl text-center">
-                        <p className="text-[7px] uppercase text-slate-500 mb-1 tracking-widest">In/Out</p>
-                        <p className="text-lg font-bold serif text-emerald-400">{selectedNode.inDegree}/{selectedNode.outDegree}</p>
+                    <div className="bg-white/5 p-5 rounded-[1.5rem] text-center">
+                        <p className="text-[9px] uppercase text-slate-500 mb-2 tracking-widest">Flow (In/Out)</p>
+                        <p className="text-2xl font-bold serif text-emerald-400">{selectedNode.inDegree}/{selectedNode.outDegree}</p>
                     </div>
                 </div>
             </div>
         )}
       </div>
 
-      <button onClick={() => setIsPanelOpen(!isPanelOpen)} className="absolute top-10 right-10 z-[60] w-14 h-14 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 transition-all text-xl ring-4 ring-white shadow-indigo-500/20">{isPanelOpen ? '×' : '⚙️'}</button>
+      <button onClick={() => setIsPanelOpen(!isPanelOpen)} className="absolute top-12 right-12 z-[60] w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] shadow-2xl flex items-center justify-center hover:scale-110 transition-all text-2xl ring-4 ring-white shadow-indigo-500/10">{isPanelOpen ? '×' : '⚙️'}</button>
     </div>
   );
 };
