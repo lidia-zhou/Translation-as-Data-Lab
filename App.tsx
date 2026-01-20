@@ -412,6 +412,12 @@ function App() {
                     </button>
                 </div>
             </div>
+
+            <footer className="mt-16 py-8 border-t border-slate-200/50 w-full max-w-xl text-center">
+              <p className="text-[11px] font-black uppercase tracking-[0.5em] text-slate-300 serif italic">
+                @Lidia Zhou Mengyuan
+              </p>
+            </footer>
         </div>
 
         {showArchitectPrompt && (
@@ -480,7 +486,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden relative">
+      <main className="flex-1 overflow-hidden relative pb-12">
         {viewMode === 'list' && (
            <div className="p-12 h-full overflow-auto animate-fadeIn custom-scrollbar bg-slate-50/20">
               {showBulkSourceHubModal && (
@@ -644,6 +650,12 @@ function App() {
             </div>
         )}
       </main>
+
+      <footer className="absolute bottom-4 left-0 w-full text-center pointer-events-none z-[100]">
+          <p className="text-[10px] font-black uppercase tracking-[0.6em] text-slate-400/60 serif italic">
+            @Lidia Zhou Mengyuan
+          </p>
+      </footer>
 
       {showTheoryLab && <TheoryLab onClose={() => setShowTheoryLab(false)} onApplyBlueprint={handleApplyBlueprint} />}
       <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />

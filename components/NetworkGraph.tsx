@@ -334,13 +334,13 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
         .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
         .on("end", (e, d) => { if(!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
 
+    // Fix for Error: Type 'unknown' cannot be used as an index type.
+    // Explicitly casting metricKey to any ensures it's treated as a valid index for any-casted data objects.
     const getRadius = (d: any) => {
         if (sizeBy === 'uniform') return (minSize + maxSize) / 2;
-        // Fix: Explicitly cast sizeBy to string to avoid index type errors if inferred as unknown
-        const metricKey = sizeBy as string;
+        const metricKey: any = sizeBy;
         const extent = d3.extent(graphData.nodes, n => (n as any)[metricKey] as number) as [number, number];
         const scale = d3.scaleSqrt().domain(extent[0] === extent[1] ? [0, extent[1] || 1] : extent).range([minSize, maxSize]);
-        // Fix for Error: Type 'unknown' cannot be used as an index type
         return scale((d as any)[metricKey]);
     };
 
