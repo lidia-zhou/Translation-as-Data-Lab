@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { BibEntry, GraphNode, GraphLink, AdvancedGraphMetrics, NodeSizeMetric, NetworkConfig, ResearchBlueprint, LayoutType, ColorMode, EdgeType } from '../types';
+import { BibEntry, GraphNode, GraphLink, NodeSizeMetric, NetworkConfig, ResearchBlueprint, LayoutType, EdgeType } from '../types';
 
 interface NetworkGraphProps {
   data: BibEntry[];
@@ -27,6 +27,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [layout, setLayout] = useState<LayoutType>('forceAtlas2');
   
   const [config, setConfig] = useState<NetworkConfig>({
     selectedNodeAttrs: ['authorName', 'translatorName', 'publisher'], 
@@ -147,7 +148,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
     svg.selectAll("*").remove();
     svg.attr("width", dimensions.width).attr("height", dimensions.height);
 
-    // Background click to deselect node
     svg.on("click", () => setSelectedNode(null));
 
     const g = svg.append("g");
@@ -157,11 +157,28 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
     const centerX = (dimensions.width - (isPanelOpen ? 380 : 0)) / 2;
     const centerY = dimensions.height / 2;
 
-    const sim = d3.forceSimulation(graphData.nodes as any)
-        .force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(200))
-        .force("charge", d3.forceManyBody().strength(-1500))
-        .force("center", d3.forceCenter(centerX, centerY))
-        .force("collide", d3.forceCollide().radius(d => 15 + (d as any).degree * 2.5 + 15));
+    const sim = d3.forceSimulation(graphData.nodes as any);
+
+    if (layout === 'circular') {
+        const radius = Math.min(centerX, centerY) * 0.8;
+        graphData.nodes.forEach((d, i) => {
+            const angle = (i / graphData.nodes.length) * 2 * Math.PI;
+            (d as any).x = centerX + radius * Math.cos(angle);
+            (d as any).y = centerY + radius * Math.sin(angle);
+        });
+    } else if (layout === 'forceAtlas2') {
+        // Approximating ForceAtlas2 in d3
+        sim.force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(100).strength(0.1))
+           .force("charge", d3.forceManyBody().strength(d => -30 * (d as any).degree - 500))
+           .force("gravity", d3.forceManyBody().strength(10))
+           .force("center", d3.forceCenter(centerX, centerY))
+           .force("collide", d3.forceCollide().radius(d => 15 + (d as any).degree * 2));
+    } else { // Fruchterman
+        sim.force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(200))
+           .force("charge", d3.forceManyBody().strength(-1500))
+           .force("center", d3.forceCenter(centerX, centerY))
+           .force("collide", d3.forceCollide().radius(d => 10 + (d as any).degree * 2));
+    }
 
     const link = g.append("g").selectAll("line").data(graphData.links).join("line")
       .attr("stroke", d => EDGE_COLORS[d.type])
@@ -170,9 +187,9 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
 
     const node = g.append("g").selectAll("g").data(graphData.nodes).join("g")
       .call(d3.drag<any, any>()
-        .on("start", (e, d) => { if(!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("start", (e, d) => { if(!e.active && layout !== 'circular') sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
-        .on("end", (e, d) => { if(!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+        .on("end", (e, d) => { if(!e.active && layout !== 'circular') sim.alphaTarget(0); d.fx = null; d.fy = null; }));
 
     const getRadius = (d: any) => {
         if (sizeBy === 'uniform') return (minSize + maxSize) / 2;
@@ -196,13 +213,18 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
         .attr("class", "text-[11px] font-bold fill-slate-500 pointer-events-none serif");
     }
 
-    sim.on("tick", () => {
-      link.attr("x1", (d: any) => d.source.x).attr("y1", (d: any) => d.source.y).attr("x2", (d:any) => d.target.x).attr("y2", (d:any) => d.target.y);
-      node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
-    });
+    if (layout !== 'circular') {
+        sim.on("tick", () => {
+          link.attr("x1", (d: any) => d.source.x).attr("y1", (d: any) => d.source.y).attr("x2", (d:any) => d.target.x).attr("y2", (d:any) => d.target.y);
+          node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
+        });
+    } else {
+        link.attr("x1", (d: any) => d.source.x).attr("y1", (d: any) => d.source.y).attr("x2", (d:any) => d.target.x).attr("y2", (d:any) => d.target.y);
+        node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
+    }
 
     return () => sim.stop();
-  }, [graphData, dimensions, isPanelOpen, sizeBy, minSize, maxSize, showLabels, selectedNode]);
+  }, [graphData, dimensions, isPanelOpen, sizeBy, minSize, maxSize, showLabels, selectedNode, layout]);
 
   const toggleEdgeType = (type: EdgeType) => {
     setConfig(prev => ({
@@ -217,7 +239,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
     <div ref={containerRef} className="flex-1 w-full h-full bg-[#fdfdfe] relative flex overflow-hidden">
       <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing"></svg>
       
-      {/* Edge Legend */}
       <div className="absolute bottom-12 left-12 flex flex-col gap-4 bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] border border-slate-100 shadow-2xl z-40">
         <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Relationship Types / 关系界定</h5>
         {(Object.entries(EDGE_COLORS) as [EdgeType, string][]).map(([type, color]) => (
@@ -228,28 +249,20 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
         ))}
       </div>
 
-      {/* Control Panel Toggle (Visible only when panel is closed) */}
       {!isPanelOpen && (
           <button 
             onClick={() => setIsPanelOpen(true)} 
-            className="absolute top-12 right-12 z-[60] w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] shadow-2xl flex items-center justify-center hover:scale-110 transition-all text-2xl ring-4 ring-white shadow-indigo-500/10"
+            className="absolute top-12 right-12 z-[60] w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] shadow-2xl flex items-center justify-center hover:scale-110 transition-all text-2xl ring-4 ring-white"
           >
             ⚙️
           </button>
       )}
 
-      {/* Control Panel */}
       <div className={`absolute top-0 right-0 h-full w-[380px] bg-white/95 backdrop-blur-2xl border-l border-slate-100 shadow-2xl transition-transform duration-500 z-50 flex flex-col ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
-        {/* Panel Header with Internal Toggle */}
         <div className="flex items-center justify-between p-6 bg-slate-50 border-b border-slate-100 shrink-0">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Lab Controls</h3>
-            <button 
-                onClick={() => setIsPanelOpen(false)} 
-                className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-500 hover:border-rose-100 transition-all text-2xl shadow-sm"
-            >
-                &times;
-            </button>
+            <button onClick={() => setIsPanelOpen(false)} className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all text-2xl shadow-sm">&times;</button>
         </div>
 
         <div className="flex bg-white border-b border-slate-100 p-2 shrink-0">
@@ -264,6 +277,18 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
             {activeTab === 'topology' && (
                 <div className="space-y-10 animate-fadeIn">
                     <section className="space-y-5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Network Layout / 图谱布局</h4>
+                        <select 
+                            value={layout} 
+                            onChange={e => setLayout(e.target.value as any)}
+                            className="w-full p-5 bg-slate-900 text-white rounded-[1.5rem] border-none text-[11px] font-bold uppercase outline-none shadow-xl"
+                        >
+                            <option value="forceAtlas2">ForceAtlas2 / 引力场</option>
+                            <option value="fruchterman">Fruchterman-Reingold / 力导向</option>
+                            <option value="circular">Circular / 环形分布</option>
+                        </select>
+                    </section>
+                    <section className="space-y-5">
                         <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Node Entities / 节点属性</h4>
                         <div className="flex flex-wrap gap-2.5">
                             {availableAttributes.map(attr => (
@@ -274,15 +299,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
                                     {attr.label}
                                 </button>
                             ))}
-                        </div>
-                    </section>
-                    <section className="space-y-5">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Graph Properties / 图谱属性</h4>
-                        <div className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem]">
-                           <span className="text-[11px] font-bold text-slate-600 uppercase">Directed Graph / 有向图</span>
-                           <button onClick={() => setConfig({...config, isDirected: !config.isDirected})} className={`w-14 h-7 rounded-full transition-colors relative ${config.isDirected ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${config.isDirected ? 'left-8' : 'left-1'}`}></div>
-                           </button>
                         </div>
                     </section>
                 </div>
@@ -346,28 +362,19 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
             )}
         </div>
 
-        {/* Selected Node Details Card (Metrics View) */}
         {selectedNode && (
             <div className="m-8 p-10 bg-slate-900 text-white rounded-[3.5rem] shadow-2xl space-y-6 animate-slideUp relative flex-shrink-0 overflow-hidden ring-4 ring-indigo-500/10">
                 <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/20 blur-3xl -mr-20 -mt-20"></div>
-                
-                {/* Fixed Close Button for Metrics Card */}
                 <button 
-                    onClick={(e) => {
-                        e.stopPropagation(); // Prevent re-selecting from bubbles
-                        setSelectedNode(null);
-                    }} 
-                    className="absolute top-8 right-10 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-rose-500 text-white text-3xl font-light transition-all leading-none z-[70] cursor-pointer active:scale-95"
-                    title="Close metrics"
+                    onClick={(e) => { e.stopPropagation(); setSelectedNode(null); }} 
+                    className="absolute top-8 right-10 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-rose-500 text-white text-3xl font-light transition-all leading-none z-[70] cursor-pointer"
                 >
                     &times;
                 </button>
-
                 <div className="space-y-2 relative z-10">
                     <p className="text-[10px] uppercase text-indigo-400 tracking-widest font-black">{selectedNode.group}</p>
                     <h4 className="text-3xl font-bold serif leading-tight pr-14">{selectedNode.name}</h4>
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4 relative z-10">
                     <div className="bg-white/5 p-5 rounded-[1.5rem] text-center border border-white/5">
                         <p className="text-[9px] uppercase text-slate-500 mb-2 tracking-widest">Tot. Degree</p>

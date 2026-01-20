@@ -7,55 +7,55 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-// --- Fallback Data / 专家预设模板 (Tailored for Portuguese-Chinese Context) ---
+// --- Fallback Data / Expert Template (Full English) ---
 const FALLBACK_BLUEPRINT: ResearchBlueprint = {
-  projectScope: "Portuguese Literature in China: A Sociological Perspective",
+  projectScope: "Standard Translation Circulation Research (Heuristic Mode)",
   dimensions: [
     {
       dimension: 'Agentive (Who)',
-      coreQuestion: "Who are the key 'patrons' and 'translators' (e.g. Fan Weixin, Gu Fu) shaping the Portuguese canon in China?",
-      dataSources: ["Archives of Macao", "Chinese Publisher Catalogues", "Translator Biographies"],
-      dhMethods: ["SNA (Network Clusters)", "Prosopographical Mapping"],
-      relevance: 98
-    },
-    {
-      dimension: 'Textual (What)',
-      coreQuestion: "What genres dominate the translation flow (Poetry vs. Realist Novels)?",
-      dataSources: ["National Library of China", "Parallel Text Corpora"],
-      dhMethods: ["Genre Distribution Analysis", "Topic Modeling"],
-      relevance: 80
-    },
-    {
-      dimension: 'Distributional (Where/When/How)',
-      coreQuestion: "How did the translation centers shift from regional hubs (Macao/Lanzhou) to cultural capitals (Beijing/Shanghai)?",
-      dataSources: ["Publisher Location Data", "Publication Years"],
-      dhMethods: ["GIS Spatial Analysis", "Spatiotemporal Heatmaps"],
+      coreQuestion: "Which mediators (translators, publishers, patrons) are central to this circulation event?",
+      dataSources: ["National Library Archives", "Publisher Metadata", "Biographical Dictionaries"],
+      dhMethods: ["Network Analysis (SNA)", "Prosopography"],
       relevance: 95
     },
     {
+      dimension: 'Textual (What)',
+      coreQuestion: "What specific stylistic or linguistic signatures define this corpus in the target language?",
+      dataSources: ["Parallel Text Corpora", "Annotated Manuscripts", "Digital Editions"],
+      dhMethods: ["Stylometric Fingerprinting", "NLP Topic Modeling"],
+      relevance: 85
+    },
+    {
+      dimension: 'Distributional (Where/When/How)',
+      coreQuestion: "How did the textual flow map across geographic centers and temporal durations?",
+      dataSources: ["Library Accession Logs", "Customs Records", "Sales Registries"],
+      dhMethods: ["GIS Mapping", "Temporal Density Analysis"],
+      relevance: 90
+    },
+    {
       dimension: 'Discursive (Why)',
-      coreQuestion: "How do paratexts (prefaces by Fan Weixin) construct the image of Saramago for Chinese readers?",
-      dataSources: ["Book Prefaces", "Book Reviews", "Academic Critiques"],
-      dhMethods: ["Sentiment Analysis", "Discourse Mapping"],
-      relevance: 70
+      coreQuestion: "What institutional ideologies or paratextual frames justified the translation act?",
+      dataSources: ["Book Prefaces", "Institutional Reviews", "Censorship Documents"],
+      dhMethods: ["Discourse Mapping", "Narrative Analysis"],
+      relevance: 75
     },
     {
       dimension: 'Reception (So what)',
-      coreQuestion: "Which authors achieve 'Canon' status in Chinese literary textbooks?",
-      dataSources: ["Citation Indexes", "University Syllabi"],
-      dhMethods: ["Impact Factor Mapping", "Reception Networks"],
-      relevance: 85
+      coreQuestion: "What was the canonization path or social impact of the translated work in the target society?",
+      dataSources: ["Citation Indexes", "University Syllabi", "Social Media Trends"],
+      dhMethods: ["Reception Network Analysis", "Impact Mapping"],
+      relevance: 80
     }
   ],
   suggestedSchema: [
-    { fieldName: "Translator_Affiliation", description: "Institution of the translator", analyticalUtility: "Institutional influence mapping", importance: 'Critical' },
-    { fieldName: "Funding_Source", description: "External funding (e.g., Camões Institute)", analyticalUtility: "Cultural diplomacy analysis", importance: 'Critical' }
+    { fieldName: "Translator_Gender", description: "Gender identity of the primary mediator", analyticalUtility: "Sociological distribution analysis", importance: 'Critical' },
+    { fieldName: "Institutional_Patronage", description: "Source of funding or state support", analyticalUtility: "Power structure mapping", importance: 'Optional' }
   ],
-  dataCleaningStrategy: "Normalize Portuguese names (e.g., 'Jose' to 'José') and unify Chinese publisher aliases.",
-  storageAdvice: "Use relational database tags to link translators with specific literary movements.",
-  methodology: "Triangulate GIS flow maps with SNA mediator graphs to identify translation bottlenecks.",
-  visualizationStrategy: "GIS Lab for circulation; Network Graph for mediator collaboration; Stats for temporal production.",
-  collectionTips: "Search for specific funding tags to identify the role of Macao as a cultural gateway."
+  dataCleaningStrategy: "Normalize publisher variants and standardize historical dates to ISO format.",
+  storageAdvice: "Relational database for complex entity relationship tracking.",
+  methodology: "Triangulate sociological distribution data with textual stylometry using a multidimensional DH matrix.",
+  visualizationStrategy: "Interactive Network Graphs for collaboration and GIS for circulation.",
+  collectionTips: "Prioritize paratextual sources to identify hidden mediators in the archive."
 };
 
 // --- Helpers ---
@@ -92,17 +92,17 @@ const decodeAudioData = async (
 
 export const generateResearchBlueprint = async (prompt: string): Promise<ResearchBlueprint> => {
   const ai = getAI();
-  if (!ai) return { ...FALLBACK_BLUEPRINT, projectScope: `Template: ${prompt}` };
+  if (!ai) return { ...FALLBACK_BLUEPRINT, projectScope: `Offline Inquiry: ${prompt}` };
 
   try {
-    const systemInstruction = `你是一位世界级的翻译史与数字人文（DH）专家。
-    你的任务是根据用户的研究课题，严格基于 "Translation as Data" 理论框架进行蓝图规划。
-    该框架包含五个维度：Agentive, Textual, Distributional, Discursive, Reception。
-    请使用中文回复。`;
+    const systemInstruction = `You are an expert in Digital Humanities and Translation History.
+    Generate a research blueprint following the "Translation as Data" framework (5 dimensions: Agentive, Textual, Distributional, Discursive, Reception).
+    Language Policy: OUTPUT MUST BE EXCLUSIVELY IN ENGLISH.
+    Focus on high-level scholarly ontological inquiries, data sources, and computational methods.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
-      contents: `研究课题: "${prompt}"。请提供遵循 "Translation as Data" 五维框架的深度科研蓝图。`,
+      contents: `User Inquiry: "${prompt}". Construct a detailed five-dimensional scholarly framework in English.`,
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -123,8 +123,7 @@ export const generateResearchBlueprint = async (prompt: string): Promise<Researc
                 },
                 required: ['dimension', 'coreQuestion', 'dataSources', 'dhMethods', 'relevance']
               },
-              minItems: 5,
-              maxItems: 5
+              minItems: 5, maxItems: 5
             },
             suggestedSchema: {
               type: Type.ARRAY,
@@ -151,35 +150,33 @@ export const generateResearchBlueprint = async (prompt: string): Promise<Researc
     });
     return JSON.parse(response.text || "{}");
   } catch (e) {
-    console.warn("AI Architect failed, using template fallback.");
-    return { ...FALLBACK_BLUEPRINT, projectScope: `Template: ${prompt}` };
+    return { ...FALLBACK_BLUEPRINT, projectScope: `Expert Fallback: ${prompt}` };
   }
 };
 
 export const generateInsights = async (entries: BibEntry[]): Promise<string> => {
     const ai = getAI();
-    if (!ai) return "本报告基于静态数据分析：当前档案呈现出明显的译者聚集效应（如范维信、顾复）。建议重点关注这些核心枢纽节点在1990年代后期（萨拉马戈获诺奖前后）的出版跨度。 (Template Mode)";
+    if (!ai) return "Synthesis generated from static metadata: The dataset shows clear clustering of mediators in urban hubs. Recommend further longitudinal GIS analysis. (Offline Logic Engaged)";
     
     try {
-        const dataSummary = entries.slice(0, 30).map(e => `- ${e.title}`).join('\n');
+        const dataSummary = entries.slice(0, 30).map(e => `- ${e.title} (${e.publicationYear})`).join('\n');
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `Analyze these translation records:\n\n${dataSummary}`,
+            contents: `Provide a scholarly insight in English based on these translation records:\n\n${dataSummary}`,
         });
         return response.text || "";
     } catch (e) {
-        return "数据分析模块目前处于本地模式，无法生成实时洞察。";
+        return "Synthesized insights currently unavailable in local mode.";
     }
 }
 
-// Geocode, Video, and TTS logic remains the same but with null checks
 export const geocodeLocation = async (locationName: string): Promise<[number, number] | null> => {
   const ai = getAI();
   if (!ai || !locationName) return null;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Find the latitude and longitude for: "${locationName}". Output as JSON [lon, lat].`,
+      contents: `Latitude/Longitude for: "${locationName}". JSON [lon, lat].`,
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(response.text || "null");
@@ -192,7 +189,7 @@ export const speakTutorialPart = async (text: string, voice: string = 'Zephyr'):
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text: `Read: ${text}` }] }],
+            contents: [{ parts: [{ text: `Read clearly: ${text}` }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
@@ -208,51 +205,33 @@ export const speakTutorialPart = async (text: string, voice: string = 'Zephyr'):
 export const generateTutorialScript = async (project: Project): Promise<{ title: string, content: string }[]> => {
   const ai = getAI();
   if (!ai) return [];
-
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `为研究项目 "${project.name}" 生成一个 4 步的学术导览脚本。这个项目是关于翻译史研究的。
-      请包含标题和内容。回复为 JSON 数组。`,
+      contents: `Provide a 4-step tutorial in English for the project: "${project.name}". Return JSON array.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              content: { type: Type.STRING }
-            },
+            properties: { title: { type: Type.STRING }, content: { type: Type.STRING } },
             required: ['title', 'content']
           }
         }
       }
     });
     return JSON.parse(response.text || "[]");
-  } catch (e) {
-    console.error("Failed to generate tutorial script", e);
-    return [];
-  }
+  } catch (e) { return []; }
 };
 
 export const generateAtmosphericVideo = async (prompt: string): Promise<string | null> => {
-  if (typeof window !== 'undefined' && (window as any).aistudio) {
-    const aistudio = (window as any).aistudio;
-    if (!(await aistudio.hasSelectedApiKey())) {
-      await aistudio.openSelectKey();
-    }
-  }
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
-      prompt: prompt,
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '16:9'
-      }
+      prompt,
+      config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
     });
     while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 10000));
@@ -263,8 +242,5 @@ export const generateAtmosphericVideo = async (prompt: string): Promise<string |
     const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     const blob = await response.blob();
     return URL.createObjectURL(blob);
-  } catch (e: any) {
-    console.error("Video generation failed", e);
-    return null;
-  }
+  } catch (e) { return null; }
 };
