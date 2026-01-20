@@ -3,293 +3,203 @@ import { BibEntry, Gender } from "./types";
 
 export const SAMPLE_TUTORIAL_SCRIPT = [
     {
-        title: "欢迎来到 Translatio 实验室",
-        content: "您正在查看的是基于 DGLAB 官方资助名录的样本项目。这个平台专为翻译研究学者设计，旨在将枯燥的著录数据转化为生动的学术洞察。让我们开始探索吧。"
+        title: "欢迎来到葡萄牙文学在华译介实验室",
+        content: "本数据集来源于真实的学术著录，记录了从1955年至今葡萄牙语文学作品在中国（包括内地及港澳台地区）的翻译与流通情况。无需AI介入，您即可通过可视化探索其中的权力格局。"
     },
     {
-        title: "研究蓝图：定义您的视野",
-        content: "在‘Blueprint’选项卡中，AI 会根据您的研究课题建议数据架构。例如本项目关注的是‘社会翻译学’路径，建议您重点采集资助机构与书籍流派，以分析权力与制度的中介作用。"
+        title: "GIS 空间分布：观察“译介热区”",
+        content: "在‘GIS Lab’中，您会发现译介活动并非均匀分布。北京、上海和广州是核心。通过‘Focus Mode’，您可以观察到如兰州、海口等内陆或沿海节点在特定时期的突起。"
     },
     {
-        title: "网络实验室：寻找枢纽节点",
-        content: "进入‘Network Lab’。通过‘社区检测’功能，您可以发现译者、作者与出版社之间形成的非正式‘文化圈’。那些在中心位置的节点，往往就是决定翻译流动方向的关键中介。"
-    },
-    {
-        title: "全球流转：可视化地理脉络",
-        content: "最后，‘Global Map’将为您揭示文本在地理空间上的跨国迁徙。您可以直观地看到葡萄牙文学是如何从里斯本出发，流向伦敦、纽约乃至东京的出版市场。"
+        title: "关系网络：识别“中介者”",
+        content: "切换到‘Network’。观察 Fan Weixin (范维信) 或 Gu Fu (顾复) 等核心译者如何连接起萨拉马戈与不同的出版社，构成文学流转的社会网络。"
     }
 ];
 
+// Coordinate Map for key Chinese locations found in the data
+const COORDS: Record<string, [number, number]> = {
+    "Shanghai": [121.4737, 31.2304],
+    "Beijing": [116.4074, 39.9042],
+    "Lanzhou": [103.8235, 36.0581],
+    "Nanjing": [118.7969, 32.0603],
+    "Macau": [113.5439, 22.1987],
+    "Haikou": [110.3312, 20.0319],
+    "Hangzhou": [120.1551, 30.2741],
+    "Guangzhou": [113.2644, 23.1291],
+    "Shijiazhuang": [114.5025, 38.0455],
+    "Hong Kong": [114.1694, 22.3193],
+    "Taipei": [121.5654, 25.0330],
+    "Lisbon": [-9.1393, 38.7223] // Source
+};
+
 export const SAMPLE_ENTRIES: BibEntry[] = [
-    // --- Michael Kegler (德语区核心枢纽) ---
     {
-        id: "dglab-mk1",
-        title: "Eine Allgemeine Theorie des Vergessens",
-        publicationYear: 2017,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Michael Kegler", gender: Gender.MALE },
-        publisher: "C.H. Beck",
-        originalCity: "Luanda",
-        city: "Munich",
+        id: "pt-001",
+        title: "Esreiros (泥沼)",
+        publicationYear: 1955,
+        author: { name: "Soeiro Pereira Gomes", gender: Gender.MALE },
+        translator: { name: "Da Kai, Xiao Lin", gender: Gender.UNKNOWN },
+        publisher: "Shanghai Literature and Art Publishing House",
+        city: "Shanghai",
+        provinceState: "Shanghai (上海)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "German",
-        customMetadata: { "Genre": "Modernism", "Apoios": "DGLAB", "sourceCoord": [13.2345, -8.8390], "targetCoord": [11.5761, 48.1374] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Shanghai"] }
     },
     {
-        id: "dglab-mk2",
-        title: "Das Lachen der Geckos",
-        publicationYear: 2008,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Michael Kegler", gender: Gender.MALE },
-        publisher: "A1 Verlag",
-        originalCity: "Luanda",
-        city: "Munich",
+        id: "pt-002",
+        title: "Amor de Perdição (败德之爱)",
+        publicationYear: 1981,
+        author: { name: "Camilo Castelo Branco", gender: Gender.MALE },
+        translator: { name: "Gu Fu, Xue Chuandong", gender: Gender.MALE },
+        publisher: "Gansu People's Publishing House",
+        city: "Lanzhou",
+        provinceState: "Gansu (甘肃)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "German",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "n.d.", "sourceCoord": [13.2345, -8.8390], "targetCoord": [11.5761, 48.1374] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Lanzhou"] }
     },
     {
-        id: "dglab-mk3",
-        title: "Die Frauen meines Vaters",
-        publicationYear: 2010,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Michael Kegler", gender: Gender.MALE },
-        publisher: "A1 Verlag",
-        originalCity: "Luanda",
-        city: "Munich",
+        id: "pt-003",
+        title: "O Crime do Padre Amaro (阿马罗神父的罪恶)",
+        publicationYear: 1985,
+        author: { name: "Eça de Queirós", gender: Gender.MALE },
+        translator: { name: "Gu Fu, Xue Chuandong", gender: Gender.MALE },
+        publisher: "Huashan Literature and Art Publishing House",
+        city: "Shijiazhuang",
+        provinceState: "Hebei (河北)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "German",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "DGLAB", "sourceCoord": [13.2345, -8.8390], "targetCoord": [11.5761, 48.1374] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Shijiazhuang"] }
     },
     {
-        id: "dglab-mk4",
-        title: "Herr Valéry und die Logik",
-        publicationYear: 2020,
-        author: { name: "Gonçalo M. Tavares", gender: Gender.MALE },
-        translator: { name: "Michael Kegler", gender: Gender.MALE },
-        publisher: "Korrespondenzen",
-        originalCity: "Lisbon",
-        city: "Vienna",
+        id: "pt-004",
+        title: "Antologia de Poesia (佩索阿诗选)",
+        publicationYear: 1986,
+        author: { name: "Fernando Pessoa", gender: Gender.MALE },
+        translator: { name: "Jin Guoping, Xavier Gonçalo", gender: Gender.MALE },
+        publisher: "Instituto Cultural de Macau",
+        city: "Macau",
+        provinceState: "Macau (澳门)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "German",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "DGLAB; Camões IP", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [16.3738, 48.2082] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Macau"] }
     },
     {
-        id: "dglab-mk5",
-        title: "Ein Dasein aus Paper",
-        publicationYear: 2021,
-        author: { name: "Al Berto", gender: Gender.MALE },
-        translator: { name: "Michael Kegler", gender: Gender.MALE },
-        publisher: "Elfenbein",
-        originalCity: "Coimbra",
-        city: "Berlin",
+        id: "pt-005",
+        title: "Memorial do Convento (修道院纪事)",
+        publicationYear: 1996,
+        author: { name: "José Saramago", gender: Gender.MALE },
+        translator: { name: "Fan Weixin", gender: Gender.MALE },
+        publisher: "Huashan Literature and Art Publishing House",
+        city: "Shijiazhuang",
+        provinceState: "Hebei (河北)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "German",
-        customMetadata: { "Genre": "Poetry", "Apoios": "DGLAB; Camões IP", "sourceCoord": [-8.4115, 40.2033], "targetCoord": [13.4050, 52.5200] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Shijiazhuang"] }
     },
-
-    // --- Daniel Hahn (英语区核心枢纽) ---
     {
-        id: "dglab-dh1",
-        title: "A General Theory of Oblivion",
+        id: "pt-006",
+        title: "Ensaio sobre a Cegueira (失明症漫记)",
+        publicationYear: 2014,
+        author: { name: "José Saramago", gender: Gender.MALE },
+        translator: { name: "Fan Weixin", gender: Gender.MALE },
+        publisher: "Nanhai Publishing Company",
+        city: "Haikou",
+        provinceState: "Hainan (海南)",
+        sourceLanguage: "Portuguese",
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Haikou"] }
+    },
+    {
+        id: "pt-007",
+        title: "A Caverna (洞穴)",
+        publicationYear: 2018,
+        author: { name: "José Saramago", gender: Gender.MALE },
+        translator: { name: "Huang Qian", gender: Gender.FEMALE },
+        publisher: "Writers Publishing House",
+        city: "Beijing",
+        provinceState: "Beijing (北京)",
+        sourceLanguage: "Portuguese",
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Beijing"] }
+    },
+    {
+        id: "pt-008",
+        title: "Os Maias (玛雅一家)",
+        publicationYear: 1998,
+        author: { name: "Eça de Queirós", gender: Gender.MALE },
+        translator: { name: "Zhang Baosheng, Ren Jisheng", gender: Gender.MALE },
+        publisher: "Guangfu Publishing",
+        city: "Taipei",
+        provinceState: "Taiwan (台湾)",
+        sourceLanguage: "Portuguese",
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Taipei"] }
+    },
+    {
+        id: "pt-009",
+        title: "Livro do Desassossego (不安之书)",
         publicationYear: 2015,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Daniel Hahn", gender: Gender.MALE },
-        publisher: "Archipelago",
-        originalCity: "Luanda",
-        city: "New York",
+        author: { name: "Fernando Pessoa", gender: Gender.MALE },
+        translator: { name: "Han Shaoqing", gender: Gender.MALE },
+        publisher: "Shanghai Literature and Art Publishing House",
+        city: "Shanghai",
+        provinceState: "Shanghai (上海)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Modernism", "Apoios": "DGLAB", "sourceCoord": [13.2345, -8.8390], "targetCoord": [-74.006, 40.7128] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Shanghai"] }
     },
     {
-        id: "dglab-dh2",
-        title: "The Book of Chameleons",
-        publicationYear: 2006,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Daniel Hahn", gender: Gender.MALE },
-        publisher: "Arcadia",
-        originalCity: "Luanda",
-        city: "London",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "n.d.", "sourceCoord": [13.2345, -8.8390], "targetCoord": [-0.1278, 51.5074] }
-    },
-    {
-        id: "dglab-dh3",
-        title: "The Living and the Rest",
-        publicationYear: 2025,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Daniel Hahn", gender: Gender.MALE },
-        publisher: "Archipelago",
-        originalCity: "Luanda",
-        city: "New York",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "n.d.", "sourceCoord": [13.2345, -8.8390], "targetCoord": [-74.006, 40.7128] }
-    },
-    {
-        id: "dglab-dh4",
-        title: "Nowhere People",
+        id: "pt-010",
+        title: "O Homem Duplicado (双生)",
         publicationYear: 2014,
-        author: { name: "Paulo Scott", gender: Gender.MALE },
-        translator: { name: "Daniel Hahn", gender: Gender.MALE },
-        publisher: "And Other Stories",
-        originalCity: "Porto Alegre",
-        city: "London",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Social Fiction", "Apoios": "n.d.", "sourceCoord": [-51.2177, -30.0346], "targetCoord": [-0.1278, 51.5074] }
-    },
-
-    // --- Maho Kinoshita (日语区枢纽) ---
-    {
-        id: "dglab-mkj1",
-        title: "Dopo la morte mi sono successe molte cose",
-        publicationYear: 2023,
-        author: { name: "Ricardo Adolfo", gender: Gender.MALE },
-        translator: { name: "Maho Kinoshita", gender: Gender.FEMALE },
-        publisher: "Shoshikankanbou",
-        originalCity: "Lisbon",
-        city: "Tokyo",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Japanese / 日本語",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "DGLAB; Camões IP", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [139.6503, 35.6762] }
-    },
-    {
-        id: "dglab-mkj2",
-        title: "O vendedor de passados (*)",
-        publicationYear: 2023,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Maho Kinoshita", gender: Gender.FEMALE },
-        publisher: "Khakasuisha",
-        originalCity: "Luanda",
-        city: "Tokyo",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Japanese / 日本語",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "DGLAB; Camões IP", "sourceCoord": [13.2345, -8.8390], "targetCoord": [139.6503, 35.6762] }
-    },
-
-    // --- Archipelago Books (纽约枢纽出版商) ---
-    {
-        id: "dglab-arc1",
-        title: "My Father's Wives",
-        publicationYear: 2008,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Daniel Hahn", gender: Gender.MALE },
-        publisher: "Archipelago",
-        originalCity: "Luanda",
-        city: "New York",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "DGLAB", "sourceCoord": [13.2345, -8.8390], "targetCoord": [-74.006, 40.7128] }
-    },
-    {
-        id: "dglab-arc2",
-        title: "Rainy Season",
-        publicationYear: 2009,
-        author: { name: "José Eduardo Agualusa", gender: Gender.MALE },
-        translator: { name: "Daniel Hahn", gender: Gender.MALE },
-        publisher: "Archipelago",
-        originalCity: "Luanda",
-        city: "New York",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Contemporary Fiction", "Apoios": "n.d.", "sourceCoord": [13.2345, -8.8390], "targetCoord": [-74.006, 40.7128] }
-    },
-
-    // --- Saramago (诺贝尔奖全球流通) ---
-    {
-        id: "dglab-s1",
-        title: "Blindness",
-        publicationYear: 1997,
         author: { name: "José Saramago", gender: Gender.MALE },
-        translator: { name: "Giovanni Pontiero", gender: Gender.MALE },
-        publisher: "Harvill Press",
-        originalCity: "Lisbon",
-        city: "London",
+        translator: { name: "Fan Weixin", gender: Gender.MALE },
+        publisher: "Nanhai Publishing Company",
+        city: "Haikou",
+        provinceState: "Hainan (海南)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Philosophical Fiction", "Apoios": "DGLAB", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [-0.1278, 51.5074] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Haikou"] }
     },
     {
-        id: "dglab-s2",
-        title: "The Year of the Death of Ricardo Reis",
-        publicationYear: 1991,
-        author: { name: "José Saramago", gender: Gender.MALE },
-        translator: { name: "Giovanni Pontiero", gender: Gender.MALE },
-        publisher: "Harcourt Brace",
-        originalCity: "Lisbon",
-        city: "New York",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "English",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "n.d.", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [-74.006, 40.7128] }
-    },
-    {
-        id: "dglab-s3",
-        title: "L'An de la mort de Ricardo Reis",
+        id: "pt-011",
+        title: "Mensagem (使命)",
         publicationYear: 1988,
-        author: { name: "José Saramago", gender: Gender.MALE },
-        translator: { name: "Claude Fages", gender: Gender.MALE },
-        publisher: "Seuil",
-        originalCity: "Lisbon",
-        city: "Paris",
+        author: { name: "Fernando Pessoa", gender: Gender.MALE },
+        translator: { name: "Lu Ping", gender: Gender.UNKNOWN },
+        publisher: "Instituto Cultural de Macau",
+        city: "Macau",
+        provinceState: "Macau (澳门)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "French",
-        customMetadata: { "Genre": "Literary Fiction", "Apoios": "n.d.", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [2.3522, 48.8566] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Macau"] }
     },
-
-    // --- 童书视觉网络 (Catarina Sobral & João Gomes de Abreu) ---
     {
-        id: "dglab-b1",
-        title: "A ilha (The Island)",
+        id: "pt-012",
+        title: "A Relíquia (遗物)",
+        publicationYear: 1996,
+        author: { name: "Eça de Queirós", gender: Gender.MALE },
+        translator: { name: "Zhou Hanjun", gender: Gender.UNKNOWN },
+        publisher: "Instituto Cultural de Macau",
+        city: "Macau",
+        provinceState: "Macau (澳门)",
+        sourceLanguage: "Portuguese",
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Macau"] }
+    },
+    {
+        id: "pt-013",
+        title: "O Evangelho segundo Jesus Cristo",
         publicationYear: 2014,
-        author: { name: "João Gomes de Abreu", gender: Gender.MALE },
-        translator: { name: "n.d.", gender: Gender.UNKNOWN },
-        publisher: "Xiaduo (霞朵)",
-        originalCity: "Lisbon",
-        city: "Beijing",
+        author: { name: "José Saramago", gender: Gender.MALE },
+        translator: { name: "Fan Weixin", gender: Gender.MALE },
+        publisher: "Nanhai Publishing Company",
+        city: "Haikou",
+        provinceState: "Hainan (海南)",
         sourceLanguage: "Portuguese",
-        targetLanguage: "Chinese / 中文",
-        customMetadata: { "Genre": "Infantojuvenil", "Apoios": "n.d.", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [116.4074, 39.9042] }
-    },
-    {
-        id: "dglab-b2",
-        title: "Wispa (A ilha)",
-        publicationYear: 2018,
-        author: { name: "João Gomes de Abreu", gender: Gender.MALE },
-        translator: { name: "n.d.", gender: Gender.UNKNOWN },
-        publisher: "Kinderkulka",
-        originalCity: "Lisbon",
-        city: "Warsaw",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Polish",
-        customMetadata: { "Genre": "Infantojuvenil", "Apoios": "DGLAB", "sourceCoord": [-9.1393, 38.7223], "targetCoord": [21.0122, 52.2297] }
-    },
-    {
-        id: "dglab-b3",
-        title: "Achimpa",
-        publicationYear: 2018,
-        author: { name: "Catarina Sobral", gender: Gender.FEMALE },
-        translator: { name: "Zhang Xiaofei", gender: Gender.FEMALE },
-        publisher: "World Book Publishing",
-        originalCity: "Coimbra",
-        city: "Beijing",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "Chinese / 中文",
-        customMetadata: { "Genre": "Infantojuvenil", "Apoios": "n.d.", "sourceCoord": [-8.4115, 40.2033], "targetCoord": [116.4074, 39.9042] }
-    },
-    {
-        id: "dglab-b4",
-        title: "Impossível",
-        publicationYear: 2019,
-        author: { name: "Catarina Sobral", gender: Gender.FEMALE },
-        translator: { name: "Joana Cabral", gender: Gender.FEMALE },
-        publisher: "Hélium",
-        originalCity: "Coimbra",
-        city: "Paris",
-        sourceLanguage: "Portuguese",
-        targetLanguage: "French",
-        customMetadata: { "Genre": "Infantojuvenil", "Apoios": "DGLAB", "sourceCoord": [-8.4115, 40.2033], "targetCoord": [2.3522, 48.8566] }
+        targetLanguage: "Chinese",
+        customMetadata: { "sourceCoord": COORDS["Lisbon"], "targetCoord": COORDS["Haikou"] }
     }
 ];

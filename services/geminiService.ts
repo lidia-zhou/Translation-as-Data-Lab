@@ -7,55 +7,55 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-// --- Fallback Data / 专家预设模板 ---
+// --- Fallback Data / 专家预设模板 (Tailored for Portuguese-Chinese Context) ---
 const FALLBACK_BLUEPRINT: ResearchBlueprint = {
-  projectScope: "General Translation Studies Lab (Template Mode)",
+  projectScope: "Portuguese Literature in China: A Sociological Perspective",
   dimensions: [
     {
       dimension: 'Agentive (Who)',
-      coreQuestion: "Who are the primary mediators (translators, publishers, patrons) in this flow?",
-      dataSources: ["National Library Catalogs", "Publisher Archives", "Biographical Dictionaries"],
-      dhMethods: ["Social Network Analysis (SNA)", "Prosopography"],
-      relevance: 95
+      coreQuestion: "Who are the key 'patrons' and 'translators' (e.g. Fan Weixin, Gu Fu) shaping the Portuguese canon in China?",
+      dataSources: ["Archives of Macao", "Chinese Publisher Catalogues", "Translator Biographies"],
+      dhMethods: ["SNA (Network Clusters)", "Prosopographical Mapping"],
+      relevance: 98
     },
     {
       dimension: 'Textual (What)',
-      coreQuestion: "What are the linguistic shifts and stylistic features of the translated corpus?",
-      dataSources: ["Parallel Corpora", "Translation Manuscripts"],
-      dhMethods: ["Corpus Linguistics", "Stylometry"],
-      relevance: 85
+      coreQuestion: "What genres dominate the translation flow (Poetry vs. Realist Novels)?",
+      dataSources: ["National Library of China", "Parallel Text Corpora"],
+      dhMethods: ["Genre Distribution Analysis", "Topic Modeling"],
+      relevance: 80
     },
     {
       dimension: 'Distributional (Where/When/How)',
-      coreQuestion: "How did the text circulate geographically and temporally?",
-      dataSources: ["Shipping Records", "Sales Data", "Library Holdings"],
-      dhMethods: ["GIS Mapping", "Time-series Analysis"],
-      relevance: 90
+      coreQuestion: "How did the translation centers shift from regional hubs (Macao/Lanzhou) to cultural capitals (Beijing/Shanghai)?",
+      dataSources: ["Publisher Location Data", "Publication Years"],
+      dhMethods: ["GIS Spatial Analysis", "Spatiotemporal Heatmaps"],
+      relevance: 95
     },
     {
       dimension: 'Discursive (Why)',
-      coreQuestion: "What institutional discourses justified or framed the translation?",
-      dataSources: ["Paratexts (Prefaces/Postscripts)", "Critical Reviews"],
-      dhMethods: ["Topic Modeling", "Sentiment Analysis"],
-      relevance: 75
+      coreQuestion: "How do paratexts (prefaces by Fan Weixin) construct the image of Saramago for Chinese readers?",
+      dataSources: ["Book Prefaces", "Book Reviews", "Academic Critiques"],
+      dhMethods: ["Sentiment Analysis", "Discourse Mapping"],
+      relevance: 70
     },
     {
       dimension: 'Reception (So what)',
-      coreQuestion: "What was the social impact or long-term canonization of the work?",
-      dataSources: ["Citation Indexes", "Digital Book Reviews", "Later Retranslations"],
-      dhMethods: ["Impact Analysis", "Diachronic Mapping"],
-      relevance: 80
+      coreQuestion: "Which authors achieve 'Canon' status in Chinese literary textbooks?",
+      dataSources: ["Citation Indexes", "University Syllabi"],
+      dhMethods: ["Impact Factor Mapping", "Reception Networks"],
+      relevance: 85
     }
   ],
   suggestedSchema: [
-    { fieldName: "Translator_Gender", description: "Gender of the translator", analyticalUtility: "Gender-based translation patterns", importance: 'Critical' },
-    { fieldName: "Paratext_Length", description: "Word count of preface/notes", analyticalUtility: "Degree of intervention", importance: 'Optional' }
+    { fieldName: "Translator_Affiliation", description: "Institution of the translator", analyticalUtility: "Institutional influence mapping", importance: 'Critical' },
+    { fieldName: "Funding_Source", description: "External funding (e.g., Camões Institute)", analyticalUtility: "Cultural diplomacy analysis", importance: 'Critical' }
   ],
-  dataCleaningStrategy: "Standardize publisher names and normalize dates to ISO format.",
-  storageAdvice: "Use SQLite or JSON for small-scale archival data.",
-  methodology: "Triangulate sociological data with textual evidence using a mixed-methods DH approach.",
-  visualizationStrategy: "Use Network Graphs for agents and Arc Maps for geographic flow.",
-  collectionTips: "Prioritize incomplete records to identify hidden mediators in the archive."
+  dataCleaningStrategy: "Normalize Portuguese names (e.g., 'Jose' to 'José') and unify Chinese publisher aliases.",
+  storageAdvice: "Use relational database tags to link translators with specific literary movements.",
+  methodology: "Triangulate GIS flow maps with SNA mediator graphs to identify translation bottlenecks.",
+  visualizationStrategy: "GIS Lab for circulation; Network Graph for mediator collaboration; Stats for temporal production.",
+  collectionTips: "Search for specific funding tags to identify the role of Macao as a cultural gateway."
 };
 
 // --- Helpers ---
@@ -158,7 +158,7 @@ export const generateResearchBlueprint = async (prompt: string): Promise<Researc
 
 export const generateInsights = async (entries: BibEntry[]): Promise<string> => {
     const ai = getAI();
-    if (!ai) return "本报告基于静态数据分析：当前档案呈现出明显的译者聚集效应。建议重点关注核心枢纽节点的出版跨度。 (Template Mode)";
+    if (!ai) return "本报告基于静态数据分析：当前档案呈现出明显的译者聚集效应（如范维信、顾复）。建议重点关注这些核心枢纽节点在1990年代后期（萨拉马戈获诺奖前后）的出版跨度。 (Template Mode)";
     
     try {
         const dataSummary = entries.slice(0, 30).map(e => `- ${e.title}`).join('\n');
@@ -205,11 +205,6 @@ export const speakTutorialPart = async (text: string, voice: string = 'Zephyr'):
     } catch (e) { return null; }
 };
 
-// --- Added missing functions for TutorialCenter ---
-
-/**
- * Generates a structured tutorial script for a research project using Gemini 3 Flash.
- */
 export const generateTutorialScript = async (project: Project): Promise<{ title: string, content: string }[]> => {
   const ai = getAI();
   if (!ai) return [];
@@ -241,22 +236,14 @@ export const generateTutorialScript = async (project: Project): Promise<{ title:
   }
 };
 
-/**
- * Generates an atmospheric background video for the tutorial using Veo 3.1.
- * Follows mandatory API key selection process for video generation.
- */
 export const generateAtmosphericVideo = async (prompt: string): Promise<string | null> => {
-  // Check for API key selection as per Veo requirements
   if (typeof window !== 'undefined' && (window as any).aistudio) {
     const aistudio = (window as any).aistudio;
     if (!(await aistudio.hasSelectedApiKey())) {
       await aistudio.openSelectKey();
     }
   }
-
-  // Always create a new instance right before the call to ensure latest key
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   try {
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
@@ -267,28 +254,17 @@ export const generateAtmosphericVideo = async (prompt: string): Promise<string |
         aspectRatio: '16:9'
       }
     });
-
-    // Poll for operation completion
     while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
     }
-
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!downloadLink) return null;
-
-    // Fetch the video content with the API key appended
     const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   } catch (e: any) {
     console.error("Video generation failed", e);
-    // If key entity not found, re-prompt for key selection
-    if (e.message?.includes("Requested entity was not found.")) {
-        if (typeof window !== 'undefined' && (window as any).aistudio) {
-            await (window as any).aistudio.openSelectKey();
-        }
-    }
     return null;
   }
 };

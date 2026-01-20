@@ -28,7 +28,7 @@ const ServiceStatus = () => {
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/10">
                 <div className={`w-1.5 h-1.5 rounded-full ${hasAPI ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
-                    {hasAPI ? 'AI Engine Active' : 'Template Mode'}
+                    {hasAPI ? 'AI Engine Active' : 'Expert Mode'}
                 </span>
             </div>
             <button 
@@ -335,6 +335,7 @@ function App() {
           translator: { name: String(row.Translator || row.translator || row['译者'] || 'Unknown'), gender: Gender.UNKNOWN },
           publisher: String(row.Publisher || row.publisher || row['出版社'] || 'N/A'),
           city: row.City || row.city || row['城市'],
+          provinceState: row.Province || row.province || row['省份/州'],
           sourceLanguage: row.SourceLanguage || row.sourceLanguage || 'N/A',
           targetLanguage: row.TargetLanguage || row.targetLanguage || 'N/A',
           tags: row.Tags ? String(row.Tags).split(',') : [],
@@ -481,7 +482,7 @@ function App() {
               { id: 'list', label: 'Archive / 著录' },
               { id: 'network', label: 'Network / 网络' },
               { id: 'stats', label: 'Stats / 统计' },
-              { id: 'map', label: 'Map / 地图' },
+              { id: 'map', label: 'GIS Lab / 空间实验室' },
               { id: 'blueprint', label: 'Blueprint / 蓝图' }
             ].map((m) => (
               <button key={m.id} onClick={() => setViewMode(m.id as any)} className={`px-8 py-3.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${viewMode === m.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
@@ -519,6 +520,8 @@ function App() {
                           <th className="p-10">Work Title</th>
                           <th className="p-10">Author</th>
                           <th className="p-10">Translator</th>
+                          <th className="p-10">Location (City/Province)</th>
+                          <th className="p-10">GIS</th>
                           <th className="p-10">Year</th>
                         </tr>
                       </thead>
@@ -528,6 +531,16 @@ function App() {
                             <td className="p-10 font-bold text-slate-800">{e.title}</td>
                             <td className="p-10 text-slate-600">{e.author.name}</td>
                             <td className="p-10 text-indigo-600 font-semibold">{e.translator.name}</td>
+                            <td className="p-10 text-slate-500 italic">
+                                {e.city}{e.provinceState ? `, ${e.provinceState}` : ''}
+                            </td>
+                            <td className="p-10">
+                                {e.customMetadata?.targetCoord ? (
+                                    <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase">Mapped</span>
+                                ) : (
+                                    <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[9px] font-black uppercase">Pending</span>
+                                )}
+                            </td>
                             <td className="p-10 text-slate-400 font-mono">{e.publicationYear}</td>
                           </tr>
                         ))}

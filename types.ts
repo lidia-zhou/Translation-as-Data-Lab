@@ -72,12 +72,14 @@ export interface BibEntry {
   translator: Person;
   publisher: string;
   city?: string;
+  provinceState?: string; // New field for regional analysis
   sourceLanguage: string;
   targetLanguage: string;
   customMetadata?: Record<string, any>;
   originalTitle?: string;
   originalPublicationYear?: number;
   originalCity?: string;
+  originalProvinceState?: string; // New field
   tags?: string[];
 }
 
