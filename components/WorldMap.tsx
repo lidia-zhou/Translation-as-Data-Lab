@@ -11,46 +11,126 @@ interface WorldMapProps {
 
 type MapMode = 'flow' | 'distribution';
 
+interface TooltipData {
+    x: number;
+    y: number;
+    title: string;
+    subtitle?: string;
+    count?: number;
+    from?: string;
+    to?: string;
+    type: 'node' | 'arc';
+}
+
 const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [mapData, setMapData] = useState<any>(null);
-  const [hoverInfo, setHoverInfo] = useState<{title: string, from: string, to: string, province?: string} | null>(null);
   const [mode, setMode] = useState<MapMode>('distribution');
   const [focusMode, setFocusMode] = useState(true);
+  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
 
   useEffect(() => {
-    // High resolution world map with clearer boundaries
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
       .then(r => r.json())
       .then(t => setMapData(topojson.feature(t, t.objects.countries)));
   }, []);
 
+  const handleExport = (format: 'svg' | 'png' | 'html') => {
+    if (!svgRef.current) return;
+    const svgElement = svgRef.current;
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    
+    if (format === 'html') {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Interactive Translation Map</title>
+          <style>
+            body { margin: 0; background: #f8fafc; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+            svg { width: 100%; height: 100%; max-width: 1200px; filter: drop-shadow(0 20px 50px rgba(0,0,0,0.1)); }
+          </style>
+        </head>
+        <body>${svgData}</body>
+        </html>
+      `;
+      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `spatial-analysis-${Date.now()}.html`;
+      link.click();
+      return;
+    }
+
+    // Fix: Reference svgBlob instead of the non-existent 'blob' variable on line 68.
+    if (format === 'svg') {
+      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `spatial-vector-${Date.now()}.svg`;
+      link.click();
+    } else {
+      const canvas = document.createElement("canvas");
+      const svgSize = svgElement.getBoundingClientRect();
+      canvas.width = svgSize.width * 2;
+      canvas.height = svgSize.height * 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const img = new Image();
+      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      img.onload = () => {
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const pngUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = `spatial-snapshot-${Date.now()}.png`;
+        link.click();
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+  };
+
   const geoData = useMemo(() => {
+    // 1. Flow Calculation
     const flows = data.map(e => {
-      // Default source to Lisbon if not specified, given the context of the lab (Portuguese-Chinese)
-      const sourceCoord = (e.customMetadata?.sourceCoord as any) || COORDS["lisbon"];
-      const targetCoord = (e.customMetadata?.targetCoord as any) || null;
-      
-      if (sourceCoord && targetCoord) {
-        return { 
-          source: sourceCoord, 
-          target: targetCoord, 
-          title: e.title, 
-          from: e.originalCity || 'Source Node', 
-          to: e.city || 'Target Node', 
-          province: e.provinceState 
-        };
+      const sCoord = (e.customMetadata?.sourceCoord as any) || COORDS["lisbon"];
+      const tCoord = (e.customMetadata?.targetCoord as any) || null;
+      if (sCoord && tCoord && (sCoord[0] !== tCoord[0] || sCoord[1] !== tCoord[1])) {
+        return { source: sCoord, target: tCoord, title: e.title, from: e.originalCity || 'Source Hub', to: e.city || 'Target Hub' };
       }
       return null;
     }).filter(Boolean) as any[];
 
+    // 2. Distribution - Robust naming logic
     const distributionMap = new Map<string, any>();
     data.forEach(e => {
         const coords = (e.customMetadata?.targetCoord as any) || null;
         if (coords) {
             const key = `${coords[0].toFixed(4)},${coords[1].toFixed(4)}`;
+            const validName = (e.city && e.city.toLowerCase() !== 'unknown') ? e.city : 
+                              (e.provinceState && e.provinceState.toLowerCase() !== 'unknown') ? e.provinceState : 
+                              null;
+            
             if (!distributionMap.has(key)) {
-                distributionMap.set(key, { coords, count: 0, name: e.city || 'Point', province: e.provinceState });
+                distributionMap.set(key, { 
+                  coords, 
+                  count: 0, 
+                  name: validName || 'Unknown Location', 
+                  province: e.provinceState 
+                });
+            } else if (validName) {
+                // Prioritize the best available name for this coordinate cluster
+                const existing = distributionMap.get(key);
+                if (existing.name === 'Unknown Location') {
+                    existing.name = validName;
+                }
             }
             distributionMap.get(key).count++;
         }
@@ -71,244 +151,176 @@ const WorldMap: React.FC<WorldMapProps> = ({ data }) => {
     svg.selectAll("*").remove();
 
     const g = svg.append("g");
-
     let projection = d3.geoMercator();
     
     if (focusMode && geoData.distribution.length > 0) {
         const lons = geoData.distribution.map(d => d.coords[0]);
         const lats = geoData.distribution.map(d => d.coords[1]);
-        const minLon = Math.min(...lons);
-        const maxLon = Math.max(...lons);
-        const minLat = Math.min(...lats);
-        const maxLat = Math.max(...lats);
-
-        // Calculate a tighter padding for China regions
-        const centerLon = (minLon + maxLon) / 2;
-        const centerLat = (minLat + maxLat) / 2;
-        
-        projection = d3.geoMercator()
-            .center([centerLon, centerLat])
-            .scale(width * 1.8) // Higher scale for focus
-            .translate([width / 2, height / 2]);
+        const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+        const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        projection = d3.geoMercator().center([centerLon, centerLat]).scale(width * 1.5).translate([width / 2, height / 2]);
     } else {
-        // Global overview with better centering
-        projection = d3.geoMercator()
-            .scale(width / 7)
-            .translate([width / 2, height / 1.4]);
+        projection = d3.geoMercator().scale(width / 7.5).translate([width / 2, height / 1.4]);
     }
 
     const path = d3.geoPath().projection(projection);
-    const zoom = d3.zoom<SVGSVGElement, any>()
-      .scaleExtent([0.5, 50])
-      .on("zoom", (e) => g.attr("transform", e.transform));
-    
+    const zoom = d3.zoom<SVGSVGElement, any>().scaleExtent([0.5, 60]).on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
 
-    // Deep Ocean background
-    g.append("path")
-      .datum({type: "Sphere"})
-      .attr("fill", "#f1f5f9")
-      .attr("d", path as any);
-
-    // Graticule for architectural feel
-    g.append("path")
-      .datum(d3.geoGraticule())
-      .attr("class", "graticule")
-      .attr("d", path as any)
-      .attr("fill", "none")
-      .attr("stroke", "#e2e8f0")
-      .attr("stroke-width", 0.5);
-
-    // Land layer with higher contrast
-    g.selectAll(".country")
-      .data(mapData.features)
-      .join("path")
-      .attr("fill", "#ffffff")
-      .attr("stroke", "#94a3b8") // Darker border
-      .attr("stroke-width", 0.8) // Thicker border
-      .attr("d", path as any)
-      .attr("class", "transition-colors hover:fill-slate-50");
+    // Basemap Layer
+    g.append("path").datum({type: "Sphere"}).attr("fill", "#fcfcfd").attr("d", path as any);
+    g.selectAll(".country").data(mapData.features).join("path")
+      .attr("fill", "#ffffff").attr("stroke", "#cbd5e1").attr("stroke-width", 0.5).attr("d", path as any);
 
     if (mode === 'flow') {
       const arcLayer = g.append("g");
-      
-      // Arc generator with great circle paths
       const arcGenerator = (d: any) => {
-        const route = { type: "LineString", coordinates: [d.source, d.target] };
-        return path(route as any);
+          const s = projection(d.source);
+          const t = projection(d.target);
+          if (!s || !t) return "";
+          const dx = t[0] - s[0], dy = t[1] - s[1], dr = Math.sqrt(dx * dx + dy * dy);
+          return `M${s[0]},${s[1]}A${dr},${dr} 0 0,1 ${t[0]},${t[1]}`;
       };
-
-      // Draw shadow arcs for depth
-      arcLayer.selectAll(".flow-shadow")
-        .data(geoData.flows)
-        .join("path")
-        .attr("fill", "none")
-        .attr("stroke", "#cbd5e1")
-        .attr("stroke-width", 1)
-        .attr("stroke-opacity", 0.1)
-        .attr("d", arcGenerator);
-
-      // Active Arcs
-      arcLayer.selectAll(".flow-arc")
-        .data(geoData.flows)
-        .join("path")
-        .attr("fill", "none")
-        .attr("stroke", "#6366f1")
-        .attr("stroke-width", 2)
-        .attr("stroke-opacity", 0.4)
+      
+      // Hit Areas (Invisible but wide)
+      arcLayer.selectAll(".flow-hit").data(geoData.flows).join("path")
+        .attr("fill", "none").attr("stroke", "transparent").attr("stroke-width", 20)
         .attr("d", arcGenerator)
-        .attr("stroke-dasharray", function() { return (this as any).getTotalLength(); })
-        .attr("stroke-dashoffset", function() { return (this as any).getTotalLength(); })
-        .each(function() {
-            d3.select(this)
-                .transition()
-                .duration(2000)
-                .delay(() => Math.random() * 1000)
-                .attr("stroke-dashoffset", 0);
-        })
+        .style("cursor", "pointer")
         .on("mouseenter", (e, d) => {
-            setHoverInfo({title: d.title, from: d.from, to: d.to, province: d.province});
-            d3.select(e.target).attr("stroke-opacity", 1).attr("stroke-width", 4).attr("stroke", "#4f46e5");
+            setTooltip({ x: e.pageX, y: e.pageY, title: d.title, from: d.from, to: d.to, type: 'arc' });
         })
-        .on("mouseleave", (e) => {
-            setHoverInfo(null);
-            d3.select(e.target).attr("stroke-opacity", 0.4).attr("stroke-width", 2).attr("stroke", "#6366f1");
-        });
+        .on("mouseleave", () => setTooltip(null));
+
+      // Visual Arcs
+      arcLayer.selectAll(".flow-visual").data(geoData.flows).join("path")
+        .attr("fill", "none").attr("stroke", "#6366f1").attr("stroke-width", 2).attr("stroke-opacity", 0.25)
+        .attr("d", arcGenerator)
+        .attr("pointer-events", "none");
+
+      // Particles
+      geoData.flows.forEach((d) => {
+          const s = projection(d.source);
+          const t = projection(d.target);
+          if (!s || !t) return;
+
+          const arc = arcLayer.append("path").attr("d", arcGenerator(d)).attr("fill", "none").attr("stroke", "transparent").attr("pointer-events", "none");
+          const totalLength = (arc.node() as SVGPathElement).getTotalLength();
+          const particle = arcLayer.append("circle").attr("r", 2.5).attr("fill", "#6366f1").attr("pointer-events", "none");
+
+          const animate = () => {
+              particle.transition().duration(2500 + Math.random() * 2000).ease(d3.easeQuadInOut)
+                .attrTween("transform", () => {
+                  const node = arc.node() as SVGPathElement;
+                  return (t: number) => {
+                    const p = node.getPointAtLength(t * totalLength);
+                    return `translate(${p.x},${p.y})`;
+                  };
+                }).on("end", animate);
+          };
+          animate();
+      });
     }
 
     if (mode === 'distribution') {
         const bubbleLayer = g.append("g");
         const maxVal = Math.max(1, ...geoData.distribution.map(d => d.count));
-        const radiusScale = d3.scaleSqrt().domain([1, maxVal]).range([10, 50]);
-
-        // Bubble Glow Effect
-        bubbleLayer.selectAll(".dist-glow")
-            .data(geoData.distribution)
-            .join("circle")
-            .attr("cx", d => projection(d.coords)![0])
-            .attr("cy", d => projection(d.coords)![1])
-            .attr("r", d => radiusScale(d.count) * 1.5)
-            .attr("fill", "url(#glowGradient)")
-            .attr("fill-opacity", 0.3)
-            .attr("pointer-events", "none");
-
-        bubbleLayer.selectAll(".dist-bubble")
-            .data(geoData.distribution)
-            .join("circle")
-            .attr("cx", d => projection(d.coords)![0])
-            .attr("cy", d => projection(d.coords)![1])
+        const radiusScale = d3.scaleSqrt().domain([1, maxVal]).range([7, 55]);
+        
+        bubbleLayer.selectAll(".dist-bubble").data(geoData.distribution).join("circle")
+            .attr("cx", d => projection(d.coords)![0]).attr("cy", d => projection(d.coords)![1])
             .attr("r", d => radiusScale(d.count))
-            .attr("fill", "#6366f1")
-            .attr("fill-opacity", 0.6)
-            .attr("stroke", "#ffffff")
-            .attr("stroke-width", 2)
-            .attr("class", "cursor-pointer transition-all hover:fill-indigo-700 hover:scale-110")
+            .attr("fill", "#6366f1").attr("fill-opacity", 0.35)
+            .attr("stroke", "#6366f1").attr("stroke-width", 2)
+            .style("cursor", "pointer")
             .on("mouseenter", (e, d) => {
-                setHoverInfo({title: `${d.count} Archival Entries`, from: "Circulation Node", to: d.name, province: d.province});
+                setTooltip({ x: e.pageX, y: e.pageY, title: d.name, subtitle: d.province, count: d.count, type: 'node' });
             })
-            .on("mouseleave", () => setHoverInfo(null));
-            
-        bubbleLayer.selectAll(".dist-label")
-            .data(geoData.distribution)
-            .join("text")
-            .attr("x", d => projection(d.coords)![0])
-            .attr("y", d => projection(d.coords)![1] + 5)
-            .attr("text-anchor", "middle")
-            .text(d => d.count > 0 ? d.count : "")
-            .attr("class", "text-[12px] font-black fill-white pointer-events-none drop-shadow-md");
+            .on("mouseleave", () => setTooltip(null));
     }
-
-    // Individual Precision Points (Resolved Pins)
-    g.selectAll(".pin")
-        .data(geoData.distribution)
-        .join("circle")
-        .attr("cx", d => projection(d.coords)![0])
-        .attr("cy", d => projection(d.coords)![1])
-        .attr("r", 3)
-        .attr("fill", "#10b981")
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 1.5)
-        .attr("class", "pointer-events-none shadow-sm");
-
-    // Add Gradients
-    const defs = svg.append("defs");
-    const radialGradient = defs.append("radialGradient").attr("id", "glowGradient");
-    radialGradient.append("stop").attr("offset", "0%").attr("stop-color", "#6366f1").attr("stop-opacity", 0.6);
-    radialGradient.append("stop").attr("offset", "100%").attr("stop-color", "#6366f1").attr("stop-opacity", 0);
-
   }, [mapData, geoData, mode, focusMode]);
 
   return (
-    <div className="flex-1 w-full h-full bg-[#f8fafc] relative overflow-hidden flex flex-col">
-      <div className="absolute top-10 right-10 z-[100] flex gap-4">
-         <div className="bg-white/95 backdrop-blur-2xl p-2 rounded-[2rem] border border-slate-200 shadow-2xl flex gap-1 ring-1 ring-slate-100">
-            <button 
-                onClick={() => setMode('distribution')} 
-                className={`px-8 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${mode === 'distribution' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}
-            >
-                Distribution (密度)
-            </button>
-            <button 
-                onClick={() => setMode('flow')} 
-                className={`px-8 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${mode === 'flow' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}
-            >
-                Flows (流转)
-            </button>
-         </div>
-         <button 
-            onClick={() => setFocusMode(!focusMode)} 
-            className={`px-8 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all border shadow-2xl ${focusMode ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-200'}`}
-         >
-            {focusMode ? '🎯 Regional Focus' : '🌍 World View'}
-         </button>
-      </div>
-
-      <svg ref={svgRef} className="w-full h-full"></svg>
-
-      {hoverInfo && (
-        <div className="absolute top-10 left-10 bg-white/98 backdrop-blur-3xl p-10 rounded-[3rem] shadow-2xl border border-slate-100 animate-fadeIn z-[150] space-y-4 max-w-sm ring-1 ring-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-indigo-500 animate-pulse"></div>
-            <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Lab GIS Resolver</div>
+    <div className="flex-1 w-full h-full bg-[#f8fafc] relative overflow-hidden flex flex-col select-none">
+      {/* TOOLTIP COMPONENT */}
+      {tooltip && (
+          <div 
+            className="fixed z-[9999] pointer-events-none bg-slate-900 text-white p-6 rounded-[2rem] shadow-3xl border border-white/10 animate-fadeIn space-y-2 backdrop-blur-2xl ring-1 ring-white/20 transition-opacity duration-200"
+            style={{ left: tooltip.x + 30, top: tooltip.y - 30 }}
+          >
+              <h5 className="text-[9px] font-black uppercase tracking-[0.4em] text-indigo-400">
+                {tooltip.type === 'node' ? 'City Hub' : 'Textual Movement'}
+              </h5>
+              <p className="text-xl font-bold serif leading-tight">{tooltip.title}</p>
+              {tooltip.subtitle && <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{tooltip.subtitle}</p>}
+              {tooltip.count !== undefined && (
+                  <p className="text-[11px] font-bold text-slate-300 pt-1">
+                    Dataset Volume: <span className="text-indigo-300">{tooltip.count} Works</span>
+                  </p>
+              )}
+              {tooltip.from && (
+                  <div className="pt-2 flex items-center gap-3">
+                      <span className="text-[10px] bg-white/10 px-3 py-1.5 rounded-lg font-bold border border-white/5 uppercase">{tooltip.from}</span>
+                      <span className="text-indigo-400 text-xl">→</span>
+                      <span className="text-[10px] bg-indigo-600 px-3 py-1.5 rounded-lg font-bold border border-indigo-400 uppercase">{tooltip.to}</span>
+                  </div>
+              )}
           </div>
-          <div className="space-y-2">
-            <h4 className="text-3xl font-bold serif text-slate-900 leading-tight">{hoverInfo.title}</h4>
-            <div className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-slate-700">Target: {hoverInfo.to}</span>
-                {hoverInfo.province && <span className="text-xs text-slate-400 font-serif italic">Administrative: {hoverInfo.province}</span>}
-            </div>
-          </div>
-          <div className="h-px bg-slate-100 w-full"></div>
-          <div className="flex items-center justify-between text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">
-            <span>Active Archive Sync</span>
-            <span>📍 Map Mode</span>
-          </div>
-        </div>
       )}
 
-      <div className="absolute bottom-10 left-10 flex flex-col gap-6 bg-white/70 backdrop-blur-xl p-8 rounded-[3rem] border border-white shadow-2xl z-40">
-         <div className="space-y-5">
-            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Map Legend / 图例</h5>
-            <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                <div className="w-4 h-4 rounded-full bg-emerald-500 ring-4 ring-emerald-50 shadow-md"></div>
-                <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Resolved Node</span>
-                </div>
-                <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-indigo-500/40 border-2 border-indigo-200 shadow-inner"></div>
-                <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Archive Density</span>
-                </div>
-                <div className="flex items-center gap-4">
-                <div className="w-12 h-0.5 bg-indigo-400/30 dashed border-t border-indigo-400 border-dashed"></div>
-                <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Translation Path</span>
-                </div>
-            </div>
+      {/* ACTION PANEL */}
+      <div className="absolute top-10 right-10 z-[100] flex gap-4">
+         <div className="bg-white/95 backdrop-blur-2xl p-1.5 rounded-[2rem] border border-slate-200 shadow-2xl flex gap-1 ring-1 ring-slate-100">
+            <button onClick={() => setMode('distribution')} className={`px-8 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${mode === 'distribution' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>Density / 密度</button>
+            <button onClick={() => setMode('flow')} className={`px-8 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${mode === 'flow' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>Flow / 流转</button>
          </div>
-         <div className="h-px bg-slate-200 w-full"></div>
-         <p className="text-[10px] font-serif italic text-slate-400 max-w-[220px] leading-relaxed">
-            The GIS lab performs real-time mapping of bibliographic locations. If a location is missing in focus mode, please verify your archive's city/province entries.
-         </p>
+         <button onClick={() => setFocusMode(!focusMode)} className={`px-8 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all border shadow-2xl ${focusMode ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200' : 'bg-white text-slate-400 border-slate-200'}`}>
+            {focusMode ? '🎯 Regional Focus' : '🌍 World Projection'}
+         </button>
+         <div className="flex gap-1 bg-white p-1 rounded-[2rem] border border-slate-200 shadow-2xl ring-1 ring-slate-100">
+            <button onClick={() => handleExport('html')} className="px-6 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all">HTML</button>
+            <button onClick={() => handleExport('png')} className="px-6 py-4 rounded-[1.5rem] bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">PNG</button>
+         </div>
       </div>
+
+      {/* PROFESSIONAL LEGEND */}
+      <div className="absolute bottom-12 left-12 z-[100] bg-white/90 backdrop-blur-2xl p-8 rounded-[3rem] border border-slate-100 shadow-3xl w-80 space-y-6 animate-slideUp ring-1 ring-slate-100">
+          <div className="space-y-1">
+              <h5 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Computational GIS</h5>
+              <h4 className="text-2xl font-bold serif text-slate-800">Spatial Matrix / 空间矩阵</h4>
+          </div>
+          <div className="h-px bg-slate-100 w-full"></div>
+          <div className="space-y-4 text-left">
+              <div className="flex items-center gap-4">
+                  <div className="w-7 h-7 rounded-full bg-indigo-600/30 border-2 border-indigo-600 animate-pulse"></div>
+                  <div>
+                      <p className="text-[11px] font-bold text-slate-700">Cluster Intensity</p>
+                      <p className="text-[9px] uppercase text-slate-400 font-black tracking-tighter">Publication weight at city hub</p>
+                  </div>
+              </div>
+              <div className="flex items-center gap-4">
+                  <div className="w-10 h-1.5 bg-indigo-600/20 rounded-full relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-3 h-full bg-indigo-600 animate-[move_3s_infinite_linear]"></div>
+                  </div>
+                  <div>
+                      <p className="text-[11px] font-bold text-slate-700">Translational Vector</p>
+                      <p className="text-[9px] uppercase text-slate-400 font-black tracking-tighter">Movement of textual capital</p>
+                  </div>
+              </div>
+          </div>
+          <p className="text-[9px] font-serif text-slate-400 leading-relaxed border-l-2 border-indigo-100 pl-4 italic">
+            Visualizing the cross-border circulation of bibliographic artifacts. Use "Density" for production focus and "Flow" for transfer analysis.
+          </p>
+      </div>
+
+      <style>{`
+        @keyframes move {
+          0% { left: -30%; }
+          100% { left: 130%; }
+        }
+      `}</style>
+
+      <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing"></svg>
     </div>
   );
 };

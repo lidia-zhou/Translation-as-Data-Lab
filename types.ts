@@ -8,7 +8,7 @@ export enum Gender {
   UNKNOWN = 'Unknown'
 }
 
-export type LayoutType = 'forceAtlas2' | 'fruchterman' | 'circular';
+export type LayoutType = 'force' | 'radial' | 'clustered';
 export type NodeMetric = 'degree' | 'inDegree' | 'outDegree' | 'betweenness' | 'closeness' | 'eigenvector' | 'pageRank' | 'clustering' | 'modularity';
 export type NodeSizeMetric = NodeMetric | 'uniform';
 export type ColorMode = 'category' | 'community';
