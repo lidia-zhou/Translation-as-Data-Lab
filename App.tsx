@@ -1,25 +1,23 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { BibEntry, ViewMode, Gender, Project, ResearchBlueprint } from './types';
-import NetworkGraph from './components/NetworkGraph';
-import StatsDashboard from './components/StatsDashboard';
-import WorldMap from './components/WorldMap';
-import GlobalFlowBackground from './components/GlobalFlowBackground';
-import TheoryLab from './components/TheoryLab';
-import ArchitectStudio from './components/ArchitectStudio';
-import { architectDatabaseSchema, ArchitectOutput, generateInsights, geocodeLocation, extractMetadataFromEntries } from './services/geminiService';
-import { SAMPLE_ENTRIES, COORDS as LOCAL_COORDS } from './constants';
+import { BibEntry, ViewMode, Gender, Project, ResearchBlueprint } from './types.ts';
+import NetworkGraph from './components/NetworkGraph.tsx';
+import StatsDashboard from './components/StatsDashboard.tsx';
+import WorldMap from './components/WorldMap.tsx';
+import GlobalFlowBackground from './components/GlobalFlowBackground.tsx';
+import TheoryLab from './components/TheoryLab.tsx';
+import ArchitectStudio from './components/ArchitectStudio.tsx';
+import { architectDatabaseSchema, ArchitectOutput, generateInsights, geocodeLocation, extractMetadataFromEntries } from './services/geminiService.ts';
+import { SAMPLE_ENTRIES, COORDS as LOCAL_COORDS } from './constants.ts';
 
 const STORAGE_KEY_PROJECTS = 'transdata_core_v34_gis_robust';
 const STORAGE_KEY_ACTIVE_ID = 'transdata_active_id_v34_gis_robust';
 
-// Improved column detection with more variants
 const getColumnValue = (row: any, keys: string[], possibleNames: string[]) => {
   const normalizedNames = possibleNames.map(n => n.toLowerCase().trim());
   const foundKey = keys.find(k => {
     const nk = k.toLowerCase().trim();
-    // Exact or partial inclusion match
     return normalizedNames.includes(nk) || 
            normalizedNames.some(pn => nk.startsWith(pn) || pn.startsWith(nk) || nk.includes(pn));
   });
@@ -86,7 +84,6 @@ function App() {
 
   const enrichEntriesWithGIS = async (entries: BibEntry[]): Promise<BibEntry[]> => {
     const updated = [...entries];
-    // Filter for entries that have some location string but no coordinates yet
     const needsGeocoding = updated.filter(e => 
       ((e.city && e.city.length > 0) || (e.provinceState && e.provinceState.length > 0)) && 
       !e.customMetadata?.targetCoord
@@ -98,14 +95,9 @@ function App() {
       if (!val) return null;
       const clean = String(val).toLowerCase().trim();
       if (!clean || clean === 'unknown' || clean === 'null' || clean === '无' || clean === '未知') return null;
-
-      // 1. Direct match
       if (LOCAL_COORDS[clean]) return LOCAL_COORDS[clean];
-
-      // 2. Stemmed match (removing administrative suffixes)
       const stem = clean.replace(/(市|省|自治区|特别行政区|街道|区|县|city|province|state|s\.a\.r\.)$/g, "").trim();
       if (LOCAL_COORDS[stem]) return LOCAL_COORDS[stem];
-      
       return null;
     };
 
@@ -117,21 +109,18 @@ function App() {
       const key = `${province}|${city}`;
       if (resultsMap.has(key)) continue;
 
-      // Priority 1: Check City Field in Local Dictionary
       let localMatch = getLocalCoord(city);
       if (localMatch) {
         resultsMap.set(key, { coord: localMatch, source: 'local' });
         continue;
       }
 
-      // Priority 2: Check Province/State Field in Local Dictionary
       localMatch = getLocalCoord(province);
       if (localMatch) {
         resultsMap.set(key, { coord: localMatch, source: 'local' });
         continue;
       }
 
-      // Priority 3: Scan all custom metadata for anything matching a known hub (Deep scan)
       if (e.customMetadata) {
           for (const val of Object.values(e.customMetadata)) {
               if (typeof val === 'string' && val.length > 1) {
@@ -145,18 +134,13 @@ function App() {
           if (resultsMap.has(key)) continue;
       }
 
-      // Priority 4: Fallback to AI Geocoding as last resort
       if (process.env.API_KEY) {
         const query = [province, city].filter(p => p && p.length > 1 && p.toLowerCase() !== 'unknown').join(" ").trim();
         if (query) {
           try {
             const aiCoord = await geocodeLocation(query);
-            if (aiCoord) {
-              resultsMap.set(key, { coord: aiCoord, source: 'ai' });
-            }
-          } catch (err) {
-            console.warn(`Geocode failed for ${query}`);
-          }
+            if (aiCoord) resultsMap.set(key, { coord: aiCoord, source: 'ai' });
+          } catch (err) { console.warn(`Geocode failed for ${query}`); }
         }
       }
     }
@@ -183,30 +167,19 @@ function App() {
     setIsGeocoding(true);
     const enrichedEntries = await enrichEntriesWithGIS(activeProject.entries);
     setProjects(prev => prev.map(p => p.id === activeProject.id ? {
-      ...p,
-      entries: enrichedEntries,
-      lastModified: Date.now()
+      ...p, entries: enrichedEntries, lastModified: Date.now()
     } : p));
     setIsGeocoding(false);
   };
 
   const addManualEntry = async () => {
     if (!activeProject || !newEntry.title) return;
-    
     setIsGeocoding(true);
-    const entry: BibEntry = {
-      ...newEntry as BibEntry,
-      id: `manual-${Date.now()}`
-    };
-
+    const entry: BibEntry = { ...newEntry as BibEntry, id: `manual-${Date.now()}` };
     const enriched = await enrichEntriesWithGIS([entry]);
-    
     setProjects(prev => prev.map(p => p.id === activeProject.id ? {
-      ...p,
-      entries: [...p.entries, ...enriched],
-      lastModified: Date.now()
+      ...p, entries: [...p.entries, ...enriched], lastModified: Date.now()
     } : p));
-
     setNewEntry({
       title: '', author: { name: '', gender: Gender.UNKNOWN }, 
       translator: { name: '', gender: Gender.UNKNOWN }, publicationYear: 2024,
@@ -286,17 +259,13 @@ function App() {
         const author = getColumnValue(row, keys, ['Author', '作者', '著者', 'Writer', 'Creator']) || 'Unknown';
         const translator = getColumnValue(row, keys, ['Translator', '译者', '译著者', 'Mediator']) || 'Unknown';
         const publisher = getColumnValue(row, keys, ['Publisher', '出版社', '出版机构', 'Institution']) || 'Unknown';
-        
-        // Expanded recognition for City and Province
         const city = getColumnValue(row, keys, ['City', '城市', '镇', 'Town', 'Site', 'PubPlace', '出版地', '地点', '市']) || '';
         const province = getColumnValue(row, keys, ['Province', 'State', '省', '省份', '州', 'Region', 'County', '地区', '行政区']) || '';
-        
         const sourceLang = getColumnValue(row, keys, ['SourceLang', '源语', '原文语言', 'Source', 'From']) || 'Portuguese';
         const targetLang = getColumnValue(row, keys, ['TargetLang', '目标语', '译文语言', 'Target', 'To']) || 'Chinese';
         const lat = getColumnValue(row, keys, ['Latitude', 'Lat', '纬度', 'CoordY', 'Y']);
         const lon = getColumnValue(row, keys, ['Longitude', 'Lon', 'Long', '经度', 'CoordX', 'X']);
-        const yearStr = String(yearRaw || '');
-        const yearMatch = yearStr.match(/\d{4}/);
+        const yearMatch = String(yearRaw || '').match(/\d{4}/);
         const publicationYear = yearMatch ? parseInt(yearMatch[0]) : 2024;
         const customMetadata: Record<string, any> = { ...row };
         if (lat !== null && lon !== null && !isNaN(Number(lat)) && !isNaN(Number(lon))) {
@@ -314,7 +283,6 @@ function App() {
       });
 
       const geocodedEntries = await enrichEntriesWithGIS(newEntries);
-      
       if (targetProjectId) {
         setProjects(prev => prev.map(p => p.id === targetProjectId ? { 
           ...p, entries: [...p.entries, ...geocodedEntries], lastModified: Date.now() 
@@ -328,11 +296,7 @@ function App() {
         setProjects(prev => [newProj, ...prev]);
         setActiveProjectId(newProj.id);
       }
-    } catch (err) {
-      alert("Failed to parse the file.");
-    } finally {
-      setIsGeocoding(false);
-    }
+    } catch (err) { alert("Failed to parse the file."); } finally { setIsGeocoding(false); }
   };
 
   if (!activeProjectId) {
@@ -419,16 +383,9 @@ function App() {
                                     <h4 className="text-xs font-bold serif text-slate-800 line-clamp-1 pr-8">{p.name}</h4>
                                     <div className="mt-1">
                                       <p className="text-[8px] font-black uppercase text-indigo-500 tracking-widest">{p.entries.length} RECORDS</p>
-                                      <p className="text-[8px] font-black uppercase text-indigo-400 tracking-widest">{p.entries.length} 条记录</p>
                                     </div>
                                 </div>
-                                <button 
-                                  onClick={(e) => deleteProject(p.id, e)}
-                                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-500 transition-all z-[100]"
-                                  title="Delete Project"
-                                >
-                                  &times;
-                                </button>
+                                <button onClick={(e) => deleteProject(p.id, e)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-500 transition-all z-[100]">&times;</button>
                             </div>
                         ))}
                     </div>
@@ -468,59 +425,6 @@ function App() {
         </div>
       </header>
 
-      {showEntryForm && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[1000] flex items-center justify-center p-6 animate-fadeIn">
-            <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <h3 className="text-2xl font-bold serif text-slate-900">Manual Entry Laboratory / 数据手动录入室</h3>
-                    <button onClick={() => setShowEntryForm(false)} className="text-4xl text-slate-300 hover:text-rose-500 transition-all">&times;</button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-12 space-y-8 custom-scrollbar">
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="col-span-2 space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Title / 书名</label>
-                            <input value={newEntry.title} onChange={e => setNewEntry({...newEntry, title: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Author / 作者</label>
-                            <input value={newEntry.author?.name} onChange={e => setNewEntry({...newEntry, author: { ...newEntry.author!, name: e.target.value }})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Translator / 译者</label>
-                            <input value={newEntry.translator?.name} onChange={e => setNewEntry({...newEntry, translator: { ...newEntry.translator!, name: e.target.value }})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Publication Year / 年份</label>
-                            <input type="number" value={newEntry.publicationYear} onChange={e => setNewEntry({...newEntry, publicationYear: parseInt(e.target.value)})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Publisher / 出版社</label>
-                            <input value={newEntry.publisher} onChange={e => setNewEntry({...newEntry, publisher: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">City / 城市</label>
-                            <input value={newEntry.city} onChange={e => setNewEntry({...newEntry, city: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Province / 省份</label>
-                            <input value={newEntry.provinceState} onChange={e => setNewEntry({...newEntry, provinceState: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 ring-indigo-50" />
-                        </div>
-                        {activeProject?.customColumns.map(col => (
-                           <div key={col} className="col-span-2 space-y-2">
-                              <label className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">{col} (Custom)</label>
-                              <input value={newEntry.customMetadata?.[col] || ''} onChange={e => setNewEntry({...newEntry, customMetadata: { ...newEntry.customMetadata, [col]: e.target.value }})} className="w-full p-4 bg-indigo-50/30 border border-indigo-100 rounded-xl outline-none focus:ring-4 ring-indigo-100" />
-                           </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="p-10 border-t border-slate-100 flex gap-4 bg-slate-50">
-                    <button onClick={() => setShowEntryForm(false)} className="flex-1 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-200 transition-all">Cancel / 取消</button>
-                    <button onClick={addManualEntry} className="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all">Save to Archive / 保存到档案</button>
-                </div>
-            </div>
-        </div>
-      )}
-
       <main className="flex-1 overflow-hidden relative">
         {viewMode === 'list' && (
             <div className="p-10 h-full overflow-auto bg-white custom-scrollbar">
@@ -528,36 +432,22 @@ function App() {
                     <div className="flex justify-between items-end border-b border-slate-100 pb-6">
                         <div className="space-y-1">
                            <h2 className="text-3xl font-bold serif text-slate-900">Archive Laboratory / 档案研究室</h2>
-                           <p className="text-slate-400 text-xs font-serif italic">Curating bibliographic records for computational analysis. / 整理书目档案以供计算分析。</p>
+                           <p className="text-slate-400 text-xs font-serif italic">Curating bibliographic records for computational analysis.</p>
                         </div>
                         <div className="flex items-center gap-4">
-                            <button 
-                              onClick={reprocessProjectGIS}
-                              disabled={isGeocoding}
-                              className={`px-6 py-3 border border-indigo-100 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isGeocoding ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm'}`}
-                            >
+                            <button onClick={reprocessProjectGIS} disabled={isGeocoding} className={`px-6 py-3 border border-indigo-100 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isGeocoding ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm'}`}>
                                 {isGeocoding ? 'Identifying GIS...' : 'Scan & Geocode Missing / 识别缺失GIS'}
                             </button>
-                            <input type="text" placeholder="Search entries... / 检索档案..." className="pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] outline-none focus:ring-4 ring-indigo-50 w-56 font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <input type="text" placeholder="Search entries..." className="pl-4 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] outline-none focus:ring-4 ring-indigo-50 w-56 font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
                     </div>
                     
                     {activeProject?.entries.length === 0 ? (
                         <div className="py-24 flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
                              <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-4xl border border-slate-100 shadow-inner">📄</div>
-                             <div className="space-y-2 max-w-md">
-                                <h3 className="text-xl font-bold serif text-slate-900">This lab is currently empty. / 此实验室目前为空。</h3>
-                                <p className="text-sm text-slate-400 font-serif leading-relaxed px-4">
-                                  You've architected a new schema! Now it's time to populate your database with archival records. / 您已建构了新的数据库架构！现在请开始填充档案记录。
-                                </p>
-                             </div>
+                             <h3 className="text-xl font-bold serif text-slate-900">This lab is currently empty.</h3>
                              <div className="flex gap-4">
-                                 <button onClick={() => setShowEntryForm(true)} className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">
-                                    + Add First Entry / 添加首条记录
-                                 </button>
-                                 <button onClick={() => fileInputRef.current?.click()} className="px-10 py-5 bg-white border border-slate-200 text-slate-400 rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">
-                                    Import Excel/CSV / 导入外部数据
-                                 </button>
+                                 <button onClick={() => setShowEntryForm(true)} className="px-10 py-5 bg-indigo-600 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-2xl">+ Add First Entry</button>
                              </div>
                         </div>
                     ) : (
@@ -565,9 +455,9 @@ function App() {
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-slate-50 text-[8px] font-black uppercase text-slate-400 border-b border-slate-100">
                                     <tr>
-                                        <th className="p-6 border-r border-slate-100">Bibliographic Record / 书目记录</th>
-                                        <th className="p-6 border-r border-slate-100">Agents / 行动主体</th>
-                                        <th className="p-6 border-r border-slate-100">GIS Context / 地理信息</th>
+                                        <th className="p-6 border-r border-slate-100">Bibliographic Record</th>
+                                        <th className="p-6 border-r border-slate-100">Agents</th>
+                                        <th className="p-6 border-r border-slate-100">GIS Context</th>
                                         {activeProject?.customColumns.map(c => <th key={c} className="p-6 text-indigo-500 font-black">{c}</th>)}
                                     </tr>
                                 </thead>
@@ -583,26 +473,7 @@ function App() {
                                                 <p className="text-xs text-indigo-400">T: {e.translator.name}</p>
                                             </td>
                                             <td className="p-6 border-r border-slate-100">
-                                                <div className="flex flex-col gap-1">
-                                                   <div className="flex items-center gap-3">
-                                                       <span className="text-xs font-bold italic">{[e.provinceState, e.city].filter(p => p && p.length > 0 && p.toLowerCase() !== 'undefined' && p.toLowerCase() !== 'unknown' && p.toLowerCase() !== '无').join(", ") || 'No Location Data'}</span>
-                                                       {e.customMetadata?.targetCoord ? (
-                                                          <div className="group relative">
-                                                             <span className={`w-3 h-3 rounded-full inline-block animate-pulse cursor-help shadow-lg ${e.customMetadata.gisSource === 'local' ? 'bg-indigo-500 shadow-indigo-200' : e.customMetadata.gisSource === 'file' ? 'bg-amber-500' : 'bg-emerald-500 shadow-emerald-200'}`}></span>
-                                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-900 text-white text-[8px] px-3 py-1.5 rounded-lg whitespace-nowrap shadow-2xl z-50">
-                                                                {e.customMetadata.gisSource === 'local' ? 'Local Dict Match / 字典匹配' : e.customMetadata.gisSource === 'file' ? 'Provided in File / 原始文件提供' : 'AI Analysis / AI 分析'} [{e.customMetadata.targetCoord[0].toFixed(2)}, {e.customMetadata.targetCoord[1].toFixed(2)}]
-                                                             </div>
-                                                          </div>
-                                                       ) : (
-                                                          <div className="group relative">
-                                                             <span className="w-3 h-3 bg-rose-200 rounded-full inline-block cursor-help border border-rose-300"></span>
-                                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-rose-600 text-white text-[8px] px-3 py-1.5 rounded-lg whitespace-nowrap shadow-2xl z-50">
-                                                                Coordinates Missing / 缺失GIS坐标
-                                                             </div>
-                                                          </div>
-                                                       )}
-                                                   </div>
-                                                </div>
+                                                <span className="text-xs font-bold italic">{[e.provinceState, e.city].filter(p => p && p.length > 0).join(", ") || 'No GIS'}</span>
                                             </td>
                                             {activeProject?.customColumns.map(c => (
                                                 <td key={c} className="p-6 text-xs italic text-slate-500">{String(e.customMetadata?.[c] || '-')}</td>
@@ -620,97 +491,7 @@ function App() {
         {viewMode === 'network' && <NetworkGraph data={filteredEntries} customColumns={activeProject?.customColumns || []} blueprint={activeProject?.blueprint || null} onDataUpdate={() => {}} />}
         {viewMode === 'stats' && <StatsDashboard data={filteredEntries} insights={statsInsights} onGenerateInsights={async () => { setIsAnalyzing(true); setStatsInsights(await generateInsights(filteredEntries)); setIsAnalyzing(false); }} isAnalyzing={isAnalyzing} customColumns={activeProject?.customColumns || []} />}
         {viewMode === 'map' && <WorldMap data={filteredEntries} />}
-        {viewMode === 'blueprint' && (
-            <div className="p-20 h-full overflow-auto bg-slate-50 custom-scrollbar">
-                <div className="max-w-4xl mx-auto space-y-10">
-                   <h2 className="text-3xl font-bold serif text-slate-900">{activeProject?.blueprint?.projectScope || 'Project Framework'}</h2>
-                   <div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                      <p className="text-lg font-serif leading-relaxed text-slate-600 italic">"{activeProject?.blueprint?.methodology || 'No framework deployed.'}"</p>
-                   </div>
-                </div>
-            </div>
-        )}
-
-        {(viewMode === 'network' || viewMode === 'map' || viewMode === 'list') && activeProject && activeProject.entries.length > 0 && (
-            <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 z-[300] transition-all duration-500 ${isTimeFilterExpanded ? 'w-[600px]' : 'w-auto'} animate-slideUp`}>
-                {isTimeFilterExpanded ? (
-                  <div className="bg-slate-900/90 backdrop-blur-3xl p-8 rounded-[2.5rem] shadow-3xl border border-white/10 ring-1 ring-white/10 flex flex-col gap-6 relative">
-                      <button 
-                        onClick={() => setIsTimeFilterExpanded(false)}
-                        className="absolute top-6 right-6 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all text-sm font-light leading-none"
-                      >
-                        &darr;
-                      </button>
-                      <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                              <div className="text-left">
-                                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 block">Temporal Filter</span>
-                                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-indigo-500 block">历史区间筛选</span>
-                              </div>
-                          </div>
-                          <div className="flex items-center gap-3 text-white font-serif text-xl italic pr-8">
-                              <span className="px-4 py-1 bg-white/5 rounded-xl border border-white/10">{yearFilter[0]}</span>
-                              <span className="text-slate-500">—</span>
-                              <span className="px-4 py-1 bg-white/5 rounded-xl border border-white/10">{yearFilter[1]}</span>
-                          </div>
-                      </div>
-                      
-                      <div className="relative h-10 flex items-center group">
-                          <div className="absolute w-full h-1.5 bg-white/10 rounded-full"></div>
-                          <div 
-                             className="absolute h-1.5 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]"
-                             style={{
-                                left: `${((yearFilter[0] - projectYearBounds[0]) / (projectYearBounds[1] - projectYearBounds[0])) * 100}%`,
-                                right: `${100 - ((yearFilter[1] - projectYearBounds[0]) / (projectYearBounds[1] - projectYearBounds[0])) * 100}%`
-                             }}
-                          ></div>
-                          
-                          <input 
-                              type="range" 
-                              min={projectYearBounds[0]} 
-                              max={projectYearBounds[1]} 
-                              value={yearFilter[0]} 
-                              onChange={(e) => setYearFilter([Math.min(parseInt(e.target.value), yearFilter[1] - 1), yearFilter[1]])}
-                              className="absolute w-full h-full opacity-0 cursor-pointer pointer-events-auto z-10" 
-                          />
-                          <input 
-                              type="range" 
-                              min={projectYearBounds[0]} 
-                              max={projectYearBounds[1]} 
-                              value={yearFilter[1]} 
-                              onChange={(e) => setYearFilter([yearFilter[0], Math.max(parseInt(e.target.value), yearFilter[0] + 1)])}
-                              className="absolute w-full h-full opacity-0 cursor-pointer pointer-events-auto z-20" 
-                          />
-                          
-                          <div 
-                            className="absolute w-6 h-6 bg-white rounded-full border-4 border-indigo-500 shadow-xl pointer-events-none"
-                            style={{ left: `calc(${((yearFilter[0] - projectYearBounds[0]) / (projectYearBounds[1] - projectYearBounds[0])) * 100}% - 12px)` }}
-                          ></div>
-                          <div 
-                            className="absolute w-6 h-6 bg-white rounded-full border-4 border-indigo-500 shadow-xl pointer-events-none"
-                            style={{ left: `calc(${((yearFilter[1] - projectYearBounds[0]) / (projectYearBounds[1] - projectYearBounds[0])) * 100}% - 12px)` }}
-                          ></div>
-                      </div>
-                      
-                      <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-slate-500">
-                          <span>Min Year / 起始: {projectYearBounds[0]}</span>
-                          <span>{filteredEntries.length} Records Active / 活跃条目</span>
-                          <span>Max Year / 截止: {projectYearBounds[1]}</span>
-                      </div>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => setIsTimeFilterExpanded(true)}
-                    className="bg-slate-900/90 backdrop-blur-3xl px-8 py-4 rounded-full shadow-3xl border border-white/10 ring-1 ring-white/10 flex items-center gap-4 hover:bg-slate-800 transition-all group"
-                  >
-                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-                    <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">{yearFilter[0]} — {yearFilter[1]}</span>
-                    <span className="text-slate-400 group-hover:text-white transition-colors">🔍</span>
-                  </button>
-                )}
-            </div>
-        )}
+        {viewMode === 'blueprint' && <div className="p-20 h-full overflow-auto bg-slate-50"><div className="max-w-4xl mx-auto space-y-10"><h2 className="text-3xl font-bold serif text-slate-900">{activeProject?.blueprint?.projectScope || 'Project Framework'}</h2><div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100"><p className="text-lg font-serif leading-relaxed text-slate-600 italic">"{activeProject?.blueprint?.methodology || 'No framework deployed.'}"</p></div></div></div>}
       </main>
 
       {showTheoryLab && <TheoryLab onClose={() => setShowTheoryLab(false)} onApplyBlueprint={handleApplyBlueprint} />}

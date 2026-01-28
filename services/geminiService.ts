@@ -1,8 +1,7 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { BibEntry, Gender, ResearchBlueprint, Project } from "../types";
+import { BibEntry, Gender, ResearchBlueprint, Project } from "../types.ts";
 
-// Helper function to decode base64 strings
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -13,7 +12,6 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-// Helper function to decode raw PCM audio data into an AudioBuffer
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -53,8 +51,6 @@ export interface ArchitectOutput {
   dataEntryProtocol: string;
   cleaningRules: string[];
 }
-
-// --- Exported Services ---
 
 export const architectDatabaseSchema = async (description: string): Promise<ArchitectOutput> => {
   const ai = getAI();
@@ -100,82 +96,35 @@ export const geocodeLocation = async (locationName: string): Promise<[number, nu
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Find the precise WGS84 Geographic Coordinates (Longitude and Latitude) for the following location: "${locationName}".
-      
-      Instructions:
-      1. Return ONLY a JSON object with "lng" and "lat" keys.
-      2. Values must be numbers.
-      3. Example for Beijing: {"lng": 116.40, "lat": 39.90}.
-      4. If the name is ambiguous, choose the most historically relevant hub for translation publishing.`,
+      contents: `Find the precise WGS84 Geographic Coordinates (Longitude and Latitude) for the following location: "${locationName}".`,
       config: { 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
-          properties: {
-            lng: { type: Type.NUMBER },
-            lat: { type: Type.NUMBER }
-          },
+          properties: { lng: { type: Type.NUMBER }, lat: { type: Type.NUMBER } },
           required: ["lng", "lat"]
         }
       }
     });
     const result = JSON.parse(response.text || "null");
     return result && typeof result.lng === 'number' ? [result.lng, result.lat] : null;
-  } catch (e) { 
-    console.error("Geocoding API error:", e);
-    return null; 
-  }
+  } catch (e) { return null; }
 };
 
 export const generateResearchBlueprint = async (prompt: string): Promise<ResearchBlueprint> => {
   const ai = getAI();
   if (!ai) return { projectScope: prompt } as any; 
-  
   const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
-    contents: `As a Professor of Translation Studies, develop a structured TAD (Translation as Data) research blueprint for: "${prompt}". 
-    You MUST categorize your analytical dimensions into EXACTLY these five keys: 
-    1. "Agentive (Who)" 
-    2. "Textual (What)" 
-    3. "Distributional (Where/When/How)" 
-    4. "Discursive (Why)" 
-    5. "Reception (So what)"`,
+    contents: `As a Professor of Translation Studies, develop a structured TAD research blueprint for: "${prompt}".`,
     config: { 
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           projectScope: { type: Type.STRING },
-          dimensions: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                dimension: { 
-                    type: Type.STRING, 
-                    description: "Must be exactly one of: Agentive (Who), Textual (What), Distributional (Where/When/How), Discursive (Why), Reception (So what)" 
-                },
-                coreQuestion: { type: Type.STRING },
-                dataSources: { type: Type.ARRAY, items: { type: Type.STRING } },
-                dhMethods: { type: Type.ARRAY, items: { type: Type.STRING } },
-                relevance: { type: Type.NUMBER }
-              },
-              required: ['dimension', 'coreQuestion', 'dataSources', 'dhMethods', 'relevance']
-            }
-          },
-          suggestedSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                fieldName: { type: Type.STRING },
-                description: { type: Type.STRING },
-                analyticalUtility: { type: Type.STRING },
-                importance: { type: Type.STRING }
-              },
-              required: ['fieldName', 'description', 'analyticalUtility', 'importance']
-            }
-          },
+          dimensions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { dimension: { type: Type.STRING }, coreQuestion: { type: Type.STRING }, dataSources: { type: Type.ARRAY, items: { type: Type.STRING } }, dhMethods: { type: Type.ARRAY, items: { type: Type.STRING } }, relevance: { type: Type.NUMBER } }, required: ['dimension', 'coreQuestion', 'dataSources', 'dhMethods', 'relevance'] } },
+          suggestedSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { fieldName: { type: Type.STRING }, description: { type: Type.STRING }, analyticalUtility: { type: Type.STRING }, importance: { type: Type.STRING } }, required: ['fieldName', 'description', 'analyticalUtility', 'importance'] } },
           dataCleaningStrategy: { type: Type.STRING },
           storageAdvice: { type: Type.STRING },
           methodology: { type: Type.STRING },
@@ -210,59 +159,76 @@ export const extractMetadataFromEntries = async (entries: {id: string, text: str
   return JSON.parse(response.text || "{}");
 }
 
-export const generateTutorialScript = async (project: Project): Promise<{ title: string, content: string }[]> => {
+// Generates a structured tutorial script for a specific research project.
+export const generateTutorialScript = async (project: Project): Promise<{ title: string; content: string }[]> => {
   const ai = getAI();
   if (!ai) return [];
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Generate a 3-part tutorial script for a digital humanities project named "${project.name}". Return as JSON array of objects with title and content.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              content: { type: Type.STRING }
-            },
-            required: ['title', 'content']
-          }
-        }
-      }
-    });
-    return JSON.parse(response.text || "[]");
-  } catch (e) { return []; }
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Generate a 3-part pedagogical tutorial script for the research project "${project.name}". 
+    The project contains these entries: ${JSON.stringify(project.entries.slice(0, 10))}. 
+    Focus on explaining the significance of the data and how to use the lab.`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            content: { type: Type.STRING },
+          },
+          required: ["title", "content"],
+        },
+      },
+    },
+  });
+  return JSON.parse(response.text || "[]");
 };
 
+// Converts text to spoken audio buffer using Gemini TTS.
 export const speakTutorialPart = async (text: string): Promise<AudioBuffer | null> => {
   const ai = getAI();
   if (!ai) return null;
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: 'Kore' },
         },
       },
-    });
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) return null;
-    
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
-    return await decodeAudioData(decodeBase64(base64Audio), audioContext, 24000, 1);
-  } catch (e) { return null; }
+    },
+  });
+
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!base64Audio) return null;
+
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+  return await decodeAudioData(
+    decodeBase64(base64Audio),
+    audioContext,
+    24000,
+    1
+  );
 };
 
+// Generates an atmospheric background video for the tutorial using Veo.
 export const generateAtmosphericVideo = async (prompt: string): Promise<string | null> => {
-  const ai = getAI();
-  if (!ai) return null;
+  // Check for API key selection for Veo models as per guidelines
+  if (typeof (window as any).aistudio?.hasSelectedApiKey === 'function') {
+    const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+    if (!hasKey) {
+      if (typeof (window as any).aistudio?.openSelectKey === 'function') {
+        await (window as any).aistudio.openSelectKey();
+      }
+    }
+  }
+
+  // Create new instance right before making the API call as per Veo guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
@@ -273,11 +239,24 @@ export const generateAtmosphericVideo = async (prompt: string): Promise<string |
         aspectRatio: '16:9'
       }
     });
+
     while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await ai.operations.getVideosOperation({operation: operation});
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      operation = await ai.operations.getVideosOperation({ operation: operation });
     }
+
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) return null;
+    
+    // Append the API key when fetching from the download link as required by the API
     return `${downloadLink}&key=${process.env.API_KEY}`;
-  } catch (e) { return null; }
+  } catch (error: any) {
+    if (error?.message?.includes("Requested entity was not found.")) {
+      if (typeof (window as any).aistudio?.openSelectKey === 'function') {
+        await (window as any).aistudio.openSelectKey();
+      }
+    }
+    console.error("Video generation failed:", error);
+    return null;
+  }
 };

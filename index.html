@@ -7,6 +7,10 @@
     <title>Translation as Data - Research Lab</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,800;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Shim to prevent "process is not defined" error in production browsers
+      window.process = window.process || { env: {} };
+    </script>
     <style>
       html, body, #root {
         height: 100%;
