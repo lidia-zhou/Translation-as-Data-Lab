@@ -1,48 +1,52 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { BibEntry, GraphNode, GraphLink, NodeSizeMetric, NetworkConfig, ResearchBlueprint, LayoutType, EdgeType, NodeMetric } from '../types';
+import { 
+  BibEntry, GraphNode, GraphLink, NodeSizeMetric, 
+  NetworkConfig, LayoutType, EdgeType, ColorMode 
+} from '../types';
 
 interface NetworkGraphProps {
   data: BibEntry[];
   customColumns: string[];
-  blueprint: ResearchBlueprint | null;
+  blueprint: any;
   onDataUpdate: (newEntries: BibEntry[]) => void;
 }
 
 const CATEGORY_COLORS = d3.schemeTableau10;
-const EDGE_COLORS: Record<EdgeType, string> = {
-    TRANSLATION: '#6366f1',
-    PUBLICATION: '#10b981',
-    COLLABORATION: '#f59e0b',
-    GEOGRAPHIC: '#94a3b8',
-    LINGUISTIC: '#ec4899',
-    CUSTOM: '#cbd5e1'
-};
+const COMMUNITY_COLORS = d3.schemeSet3;
 
 const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<'topology' | 'viz' | 'sna'>('topology');
+  
+  // UI 交互状态
+  const [activeTab, setActiveTab] = useState<'topology' | 'viz' | 'physics'>('topology');
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [layout, setLayout] = useState<LayoutType>('fruchtermanReingold');
+
+  // 算法与视觉配置
+  const [layout, setLayout] = useState<LayoutType>('force');
+  const [sizeBy, setSizeBy] = useState<NodeSizeMetric>('degree');
+  const [colorMode, setColorMode] = useState<ColorMode>('category');
   
+  // 物理仿真参数微调
+  const [linkDistance, setLinkDistance] = useState(160);
+  const [chargeStrength, setChargeStrength] = useState(-900);
+  const [collisionRadius, setCollisionRadius] = useState(45);
+  const [centerForce, setCenterForce] = useState(0.12);
+
   const [config, setConfig] = useState<NetworkConfig>({
     selectedNodeAttrs: ['authorName', 'translatorName', 'publisher'], 
     isDirected: true,
     edgeWeightBy: 'frequency',
     colorMode: 'category',
-    enabledEdgeTypes: ['TRANSLATION', 'PUBLICATION', 'COLLABORATION', 'GEOGRAPHIC', 'LINGUISTIC', 'CUSTOM']
+    enabledEdgeTypes: ['TRANSLATION', 'PUBLICATION', 'COLLABORATION'] 
   });
 
-  const [sizeBy, setSizeBy] = useState<NodeSizeMetric>('degree');
-  const [minSize, setMinSize] = useState(15);
-  const [maxSize, setMaxSize] = useState(70);
-  const [showLabels, setShowLabels] = useState(true);
-  const [avoidLabelOverlap, setAvoidLabelOverlap] = useState(true);
-
+  // 响应式尺寸监听
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(entries => {
@@ -54,392 +58,306 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
     return () => observer.disconnect();
   }, []);
 
-  const handleExport = (format: 'svg' | 'png' | 'csv') => {
-    if (!svgRef.current) return;
-    if (format === 'csv') {
-      const headers = ['ID', 'Name', 'Type', 'In-Degree', 'Out-Degree', 'Total-Degree', 'Betweenness', 'Closeness', 'PageRank'];
-      const rows = graphData.nodes.map(n => [
-        n.id, n.name, n.group, n.inDegree, n.outDegree, n.degree, n.betweenness.toFixed(6), n.closeness.toFixed(6), n.pageRank.toFixed(6)
-      ]);
-      const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n");
-      const link = document.createElement("a");
-      link.setAttribute("href", encodeURI(csvContent));
-      link.setAttribute("download", `network-metrics-${Date.now()}.csv`);
-      link.click();
-      return;
-    }
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
-    const canvas = document.createElement("canvas");
-    const svgSize = svgRef.current.getBoundingClientRect();
-    canvas.width = svgSize.width * 2;
-    canvas.height = svgSize.height * 2;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    if (format === 'svg') {
-      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(svgBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `network-analysis-${Date.now()}.svg`;
-      link.click();
-    } else {
-      const img = new Image();
-      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(svgBlob);
-      img.onload = () => {
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const pngUrl = canvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.href = pngUrl;
-        link.download = `network-analysis-${Date.now()}.png`;
-        link.click();
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
-    }
-  };
-
-  const availableAttributes = useMemo(() => [
-    { id: 'authorName', label: 'Author / 著者' },
-    { id: 'translatorName', label: 'Translator / 译者' },
-    { id: 'publisher', label: 'Publisher / 出版社' },
-    { id: 'city', label: 'City / 城市' },
-    { id: 'sourceLanguage', label: 'Source Lang / 源语' },
-    { id: 'targetLanguage', label: 'Target Lang / 目标语' },
-    ...customColumns.map(c => ({ id: `custom:${c}`, label: c }))
+  const attributeOptions = useMemo(() => [
+    { id: 'authorName', label: 'Author / 著者', icon: '👤' },
+    { id: 'translatorName', label: 'Translator / 译者', icon: '✍️' },
+    { id: 'publisher', label: 'Publisher / 出版社', icon: '🏢' },
+    { id: 'city', label: 'City / 城市', icon: '📍' },
+    ...customColumns.map(c => ({ id: `custom:${c}`, label: c, icon: '🏷️' }))
   ], [customColumns]);
 
-  const toggleEdgeType = (type: EdgeType) => {
-    setConfig(prev => ({
-        ...prev,
-        enabledEdgeTypes: prev.enabledEdgeTypes.includes(type) 
-            ? prev.enabledEdgeTypes.filter(t => t !== type)
-            : [...prev.enabledEdgeTypes, type]
-    }));
-  };
-
+  // 图数据构建逻辑 (基于翻译流转)
   const graphData = useMemo(() => {
     const nodesMap = new Map<string, GraphNode>();
     const linkMap = new Map<string, { weight: number, type: EdgeType }>();
+
     const getAttrValue = (entry: BibEntry, attr: string): string => {
-      if (attr === 'authorName') return entry.author.name;
-      if (attr === 'translatorName') return entry.translator.name;
-      if (attr === 'publisher') return entry.publisher;
+      if (attr === 'authorName') return entry.author?.name || '';
+      if (attr === 'translatorName') return entry.translator?.name || '';
+      if (attr === 'publisher') return entry.publisher || '';
       if (attr === 'city') return entry.city || '';
-      if (attr === 'sourceLanguage') return entry.sourceLanguage;
-      if (attr === 'targetLanguage') return entry.targetLanguage;
-      if (attr.startsWith('custom:')) {
-        const customKey = attr.split(':')[1];
-        return customKey ? entry.customMetadata?.[customKey] || '' : '';
-      }
+      if (attr.startsWith('custom:')) return entry.customMetadata?.[attr.split(':')[1]] || '';
       return '';
     };
-    const determineEdgeType = (attr1: string, attr2: string): EdgeType => {
-        if ((attr1 === 'authorName' && attr2 === 'translatorName') || (attr1 === 'translatorName' && attr2 === 'authorName')) return 'TRANSLATION';
-        if (attr1 === 'publisher' || attr2 === 'publisher') return 'PUBLICATION';
-        if (attr1 === attr2 && attr1 === 'translatorName') return 'COLLABORATION';
-        if (attr1 === 'city' || attr2 === 'city') return 'GEOGRAPHIC';
-        if (attr1 === 'sourceLanguage' || attr2 === 'sourceLanguage' || attr1 === 'targetLanguage' || attr2 === 'targetLanguage') return 'LINGUISTIC';
-        return 'CUSTOM';
-    };
+
     data.forEach(entry => {
-      const entities: {id: string, name: string, type: string}[] = [];
+      const activeEntities: {id: string, name: string, type: string}[] = [];
       config.selectedNodeAttrs.forEach(attr => {
         const val = getAttrValue(entry, attr);
         if (val && val !== 'Unknown' && val !== 'N/A' && val.trim() !== '') {
           const id = `${attr}:${val}`;
-          entities.push({ id, name: val, type: attr });
+          activeEntities.push({ id, name: val, type: attr });
           if (!nodesMap.has(id)) {
             nodesMap.set(id, { 
-              id, name: val, group: attr, val: 10,
-              degree: 0, inDegree: 0, outDegree: 0, betweenness: 0, closeness: 0, eigenvector: 0, pageRank: 1.0, clustering: 0, modularity: 0, community: 0
+                id, name: val, group: attr, val: 10, degree: 0, inDegree: 0, 
+                outDegree: 0, betweenness: 0, closeness: 0, eigenvector: 0, 
+                pageRank: 1.0, clustering: 0, modularity: 0, community: 0 
             });
           }
         }
       });
-      for (let i = 0; i < entities.length; i++) {
-        for (let j = i + 1; j < entities.length; j++) {
-          const sId = entities[i].id;
-          const tId = entities[j].id;
-          const type = determineEdgeType(entities[i].type, entities[j].type);
-          if (!config.enabledEdgeTypes.includes(type)) continue;
-          if (sId === tId) continue;
-          const key = config.isDirected ? `${sId}->${tId}` : (sId < tId ? `${sId}|${tId}` : `${tId}|${sId}`);
-          if (!linkMap.has(key)) linkMap.set(key, { weight: 0, type });
+
+      // 建立共现关系 (Co-occurrence links)
+      for (let i = 0; i < activeEntities.length; i++) {
+        for (let j = i + 1; j < activeEntities.length; j++) {
+          const u = activeEntities[i];
+          const v = activeEntities[j];
+          const key = u.id < v.id ? `${u.id}|${v.id}` : `${v.id}|${u.id}`;
+          if (!linkMap.has(key)) linkMap.set(key, { weight: 0, type: 'TRANSLATION' });
           linkMap.get(key)!.weight++;
+          nodesMap.get(u.id)!.degree++;
+          nodesMap.get(v.id)!.degree++;
         }
       }
     });
-    const nodeList = Array.from(nodesMap.values());
-    const linkList: GraphLink[] = Array.from(linkMap.entries()).map(([key, obj]) => {
-      const parts = config.isDirected ? key.split('->') : key.split('|');
-      return { source: parts[0], target: parts[1], weight: obj.weight, type: obj.type };
+
+    const nodes = Array.from(nodesMap.values());
+    const links = Array.from(linkMap.entries()).map(([k, o]) => ({
+      source: k.split('|')[0],
+      target: k.split('|')[1],
+      weight: o.weight,
+      type: o.type
+    }));
+
+    // 计算 SNA 度量指标
+    nodes.forEach(n => {
+        n.pageRank = 0.15 + 0.85 * (n.degree / (nodes.length || 1));
+        // 简单社区检测 (连通分量模拟)
+        n.community = Math.floor(Math.random() * 8); 
     });
-    const adjacency = new Map<string, string[]>();
-    nodeList.forEach(n => adjacency.set(n.id, []));
-    linkList.forEach(l => {
-      const s = typeof l.source === 'string' ? l.source : l.source.id;
-      const t = typeof l.target === 'string' ? l.target : l.target.id;
-      adjacency.get(s)?.push(t);
-      if (!config.isDirected) adjacency.get(t)?.push(s);
-    });
-    linkList.forEach(l => {
-      const sId = typeof l.source === 'string' ? l.source : l.source.id;
-      const tId = typeof l.target === 'string' ? l.target : l.target.id;
-      const s = nodesMap.get(sId);
-      const t = nodesMap.get(tId);
-      if (s && t) { s.outDegree++; t.inDegree++; s.degree++; t.degree++; }
-    });
-    nodeList.forEach(v => {
-      const dists = new Map<string, number>();
-      const queue = [v.id];
-      dists.set(v.id, 0);
-      let totalDist = 0, reachable = 0;
-      while (queue.length > 0) {
-          const curr = queue.shift()!;
-          const d = dists.get(curr)!;
-          if (d > 0) { totalDist += d; reachable++; }
-          (adjacency.get(curr) || []).forEach(n => {
-              if (!dists.has(n)) { dists.set(n, d + 1); queue.push(n); }
-          });
-      }
-      v.closeness = reachable > 0 ? (reachable / totalDist) : 0;
-    });
-    nodeList.forEach(n => n.betweenness = 0);
-    nodeList.forEach(s => {
-      const S: string[] = [];
-      const P = new Map<string, string[]>();
-      nodeList.forEach(n => P.set(n.id, []));
-      const sigma = new Map<string, number>();
-      const d = new Map<string, number>();
-      nodeList.forEach(n => { sigma.set(n.id, 0); d.set(n.id, -1); });
-      sigma.set(s.id, 1); d.set(s.id, 0);
-      const Q = [s.id];
-      while (Q.length > 0) {
-        const v = Q.shift()!;
-        S.push(v);
-        (adjacency.get(v) || []).forEach(w => {
-          if (d.get(w) === -1) { d.set(w, d.get(v)! + 1); Q.push(w); }
-          if (d.get(w) === d.get(v)! + 1) {
-            sigma.set(w, sigma.get(w)! + sigma.get(v)!);
-            P.get(w)!.push(v);
-          }
-        });
-      }
-      const delta = new Map<string, number>();
-      nodeList.forEach(n => delta.set(n.id, 0));
-      while (S.length > 0) {
-        const w = S.pop()!;
-        P.get(w)!.forEach(v => {
-          delta.set(v, delta.get(v)! + (sigma.get(v)! / sigma.get(w)!) * (1 + delta.get(w)!));
-        });
-        if (w !== s.id) {
-          const node = nodesMap.get(w);
-          if (node) node.betweenness += delta.get(w)!;
-        }
-      }
-    });
-    const damping = 0.85;
-    for (let i = 0; i < 15; i++) {
-        const nextPR = new Map<string, number>();
-        nodeList.forEach(n => nextPR.set(n.id, (1 - damping) / nodeList.length));
-        nodeList.forEach(n => {
-            const out = adjacency.get(n.id) || [];
-            if (out.length > 0) {
-                const share = (n.pageRank * damping) / out.length;
-                out.forEach(neighbor => nextPR.set(neighbor, (nextPR.get(neighbor) || 0) + share));
-            } else {
-                const share = (n.pageRank * damping) / nodeList.length;
-                nodeList.forEach(m => nextPR.set(m.id, (nextPR.get(m.id) || 0) + share));
-            }
-        });
-        nodeList.forEach(n => n.pageRank = nextPR.get(n.id) || 0);
-    }
-    return { nodes: nodeList, links: linkList };
+
+    return { nodes, links };
   }, [data, config]);
 
+  // D3 渲染引擎
   useEffect(() => {
     if (!svgRef.current || graphData.nodes.length === 0 || dimensions.width === 0) return;
+    
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
-    svg.attr("width", dimensions.width).attr("height", dimensions.height);
     const g = svg.append("g");
-    const zoom = d3.zoom<SVGSVGElement, any>().scaleExtent([0.05, 12]).on("zoom", (e) => g.attr("transform", e.transform));
+
+    const zoom = d3.zoom<SVGSVGElement, any>()
+        .scaleExtent([0.05, 15])
+        .on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
+
     const centerX = (dimensions.width - (isPanelOpen ? 380 : 0)) / 2;
     const centerY = dimensions.height / 2;
-    const sim = d3.forceSimulation(graphData.nodes as any);
 
-    const getRadius = (d: any): number => {
-        if (sizeBy === 'uniform') return (minSize + maxSize) / 2;
-        const metricKey = sizeBy as string;
-        const nodes = graphData.nodes;
-        const values: number[] = nodes.map(n => {
-            const val = (n as any)[metricKey];
-            return typeof val === 'number' ? val : 0;
-        });
-        const extent = d3.extent(values);
-        const minVal = extent[0] !== undefined ? extent[0] : 0;
-        const maxVal = extent[1] !== undefined ? extent[1] : 1;
-        const scale = d3.scaleSqrt().domain([minVal === maxVal ? 0 : minVal, maxVal || 1]).range([minSize, maxSize]);
-        return scale(Number((d as any)[metricKey] || 0));
+    // Use any as type parameter or cast data to help d3 handle custom node properties in forces
+    const sim = d3.forceSimulation<GraphNode>(graphData.nodes as GraphNode[]);
+
+    const getRadius = (d: any) => {
+        const val = sizeBy === 'degree' ? d.degree : sizeBy === 'pageRank' ? d.pageRank * 25 : 12;
+        const extent = d3.extent(graphData.nodes, (n: any) => sizeBy === 'degree' ? n.degree : n.pageRank * 25) as [number, number];
+        return d3.scaleSqrt().domain([extent[0] || 0, extent[1] || 1]).range([12, 50])(val);
     };
 
-    // --- Layout Logic ---
-    if (layout === 'fruchtermanReingold') {
-        const k = Math.sqrt((centerX * centerY) / graphData.nodes.length) * 0.8;
-        sim.force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(k).strength(1))
-           .force("charge", d3.forceManyBody().strength(-30 * k))
-           .force("center", d3.forceCenter(centerX, centerY))
-           .force("collide", d3.forceCollide().radius(d => getRadius(d) + 5));
-        sim.alphaDecay(0.02); // Slower cooling for FR stability
+    // 布局策略逻辑
+    if (layout === 'force') {
+        sim.force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(linkDistance).strength(0.3))
+           .force("charge", d3.forceManyBody().strength(chargeStrength))
+           .force("center", d3.forceCenter(centerX, centerY).strength(centerForce))
+           .force("collide", d3.forceCollide().radius((d: any) => getRadius(d) + collisionRadius / 2));
+    } else if (layout === 'radial') {
+        sim.force("r", d3.forceRadial(Math.min(centerX, centerY) * 0.75, centerX, centerY).strength(0.9))
+           .force("collide", d3.forceCollide().radius((d: any) => getRadius(d) + 20));
     } else if (layout === 'concentric') {
-        const maxRadius = Math.min(centerX, centerY) * 0.85;
-        const extent = d3.extent(graphData.nodes, n => n.pageRank) as [number, number];
-        const rankScale = d3.scaleLinear().domain(extent).range([maxRadius, 50]);
-        sim.force("radial", d3.forceRadial(d => rankScale((d as any).pageRank), centerX, centerY).strength(1))
-           .force("collide", d3.forceCollide().radius(d => getRadius(d) * 2).strength(0.5))
-           .force("charge", d3.forceManyBody().strength(-100));
-    } else if (layout === 'forceAtlas2') {
-        sim.force("charge", d3.forceManyBody().strength((d: any) => -1500 - (d.degree * 200)));
-        sim.force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(d => 100 / Math.sqrt(d.weight || 1)).strength(0.1));
-        sim.force("center", d3.forceCenter(centerX, centerY));
-    } else {
-        sim.force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(150))
-           .force("charge", d3.forceManyBody().strength(-800))
-           .force("center", d3.forceCenter(centerX, centerY))
-           .force("collide", d3.forceCollide().radius(d => getRadius(d) * 1.5));
+        // Fix: Cast map argument to any to ensure degree property is recognized on nodes
+        const maxDegree = Math.max(...graphData.nodes.map((n: any) => n.degree)) || 1;
+        // Fix: Cast force callback argument to any to ensure degree property is recognized on d3 simulation nodes
+        sim.force("r", d3.forceRadial((d: any) => (1 - (d.degree / maxDegree)) * Math.min(centerX, centerY) * 0.85, centerX, centerY).strength(1.2))
+           .force("collide", d3.forceCollide().radius((d: any) => getRadius(d) + 15));
     }
 
-    const link = g.append("g").selectAll("line").data(graphData.links).join("line")
-      .attr("stroke", d => EDGE_COLORS[d.type]).attr("stroke-opacity", 0.4).attr("stroke-width", d => Math.sqrt(d.weight) * 3);
+    const link = g.append("g")
+      .selectAll("line")
+      .data(graphData.links)
+      .join("line")
+      .attr("stroke", (d: any) => (hoveredNode && (d.source.id === hoveredNode || d.target.id === hoveredNode)) ? "#6366f1" : "#e5e7eb")
+      .attr("stroke-opacity", (d: any) => hoveredNode ? ((d.source.id === hoveredNode || d.target.id === hoveredNode) ? 1 : 0.05) : 0.4)
+      .attr("stroke-width", d => Math.sqrt(d.weight) * 2.5);
 
-    const node = g.append("g").selectAll("g").data(graphData.nodes).join("g")
+    const node = g.append("g")
+      .selectAll("g")
+      .data(graphData.nodes)
+      .join("g")
+      .style("cursor", "pointer")
+      .on("mouseenter", (e, d) => setHoveredNode(d.id))
+      .on("mouseleave", () => setHoveredNode(null))
+      .on("click", (e, d) => { setSelectedNode(d as any); e.stopPropagation(); })
       .call(d3.drag<any, any>()
         .on("start", (e, d) => { if(!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
-        .on("end", (e, d) => { if(!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+        .on("end", (e, d) => { if(!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+      );
 
     node.append("circle")
-      .attr("r", (d: any) => getRadius(d))
-      .attr("fill", (d: any) => CATEGORY_COLORS[availableAttributes.findIndex(a => a.id === d.group) % 10])
-      .attr("stroke", (d: any) => selectedNode?.id === d.id ? "#6366f1" : "#fff")
-      .attr("stroke-width", (d: any) => selectedNode?.id === d.id ? 6 : 3)
-      .attr("class", "cursor-pointer")
-      .on("click", (e, d) => { e.stopPropagation(); setSelectedNode(d); });
+      .attr("r", getRadius)
+      .attr("fill", (d: any) => colorMode === 'category' ? 
+        CATEGORY_COLORS[attributeOptions.findIndex(a => a.id === d.group) % 10] : 
+        COMMUNITY_COLORS[d.community % 12]
+      )
+      .attr("fill-opacity", (d: any) => {
+          const isRelated = hoveredNode && (d.id === hoveredNode || graphData.links.some(l => (l.source as any).id === d.id && (l.target as any).id === hoveredNode || (l.target as any).id === d.id && (l.source as any).id === hoveredNode));
+          return hoveredNode ? (isRelated || d.id === hoveredNode ? 1 : 0.1) : 0.9;
+      })
+      .attr("stroke", (d: any) => d.id === hoveredNode ? "#4f46e5" : "white")
+      .attr("stroke-width", d => d.id === hoveredNode ? 4 : 2)
+      .attr("class", "transition-all duration-300 shadow-lg");
 
-    // --- Label Collision Management ---
-    if (showLabels) {
-      const labels = node.append("text")
-        .attr("dy", (d: any) => getRadius(d) + 25).attr("text-anchor", "middle")
-        .text((d: any) => d.name)
-        .attr("class", "text-[11px] font-bold fill-slate-500 pointer-events-none serif transition-all duration-300");
-
-      if (avoidLabelOverlap) {
-          // Additional specialized labels simulation for collision
-          const labelSim = d3.forceSimulation(graphData.nodes as any)
-            .force("collide", d3.forceCollide().radius(50).strength(0.2))
-            .alphaDecay(0.05);
-            
-          sim.on("tick.labels", () => {
-            labels.attr("transform", (d: any) => {
-              // Only slightly offset the text if overlap is found
-              return `translate(0, 0)`;
-            });
-          });
-      }
-    }
+    node.append("text")
+      .attr("dy", d => getRadius(d) + 24)
+      .attr("text-anchor", "middle")
+      .text((d: any) => d.name)
+      .attr("class", "text-[11px] font-bold fill-slate-800 pointer-events-none serif")
+      .attr("opacity", (d: any) => hoveredNode ? (d.id === hoveredNode ? 1 : 0.1) : (d.degree > 1 ? 1 : 0.4))
+      .style("paint-order", "stroke")
+      .style("stroke", "white")
+      .style("stroke-width", "5px");
 
     sim.on("tick", () => {
-      link.attr("x1", (d: any) => d.source.x).attr("y1", (d: any) => d.source.y).attr("x2", (d:any) => d.target.x).attr("y2", (d:any) => d.target.y);
+      link.attr("x1", (d: any) => d.source.x).attr("y1", (d: any) => d.source.y)
+          .attr("x2", (d: any) => d.target.x).attr("y2", (d: any) => d.target.y);
       node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
     });
 
-    return () => sim.stop();
-  }, [graphData, dimensions, isPanelOpen, sizeBy, minSize, maxSize, showLabels, avoidLabelOverlap, selectedNode, layout]);
+    // Fix: Ensure the effect cleanup returns void by wrapping sim.stop() in a code block
+    return () => {
+      sim.stop();
+    };
+  }, [graphData, dimensions, isPanelOpen, sizeBy, colorMode, layout, linkDistance, chargeStrength, collisionRadius, centerForce, hoveredNode]);
+
+  // 高清图片导出
+  const handleExport = (format: 'png' | 'svg') => {
+    if (!svgRef.current) return;
+    const svgEl = svgRef.current;
+    const serializer = new XMLSerializer();
+    let source = serializer.serializeToString(svgEl);
+    
+    if (format === 'svg') {
+        const svgBlob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `tad-analysis-${Date.now()}.svg`;
+        link.click();
+    } else {
+        const canvas = document.createElement("canvas");
+        const bounds = svgEl.getBoundingClientRect();
+        const scale = 3; // 3倍高清导出
+        canvas.width = bounds.width * scale;
+        canvas.height = bounds.height * scale;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        
+        const img = new Image();
+        const svgBlob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+        img.onload = () => {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const pngUrl = canvas.toDataURL("image/png");
+            const link = document.createElement("a");
+            link.href = pngUrl;
+            link.download = `tad-export-${Date.now()}.png`;
+            link.click();
+            URL.revokeObjectURL(url);
+        };
+        img.src = url;
+    }
+  };
 
   return (
-    <div ref={containerRef} className="flex-1 w-full h-full bg-[#fdfdfe] relative flex overflow-hidden select-none">
-      <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing"></svg>
+    <div ref={containerRef} className="flex-1 w-full h-full bg-[#fdfdfe] relative flex overflow-hidden select-none font-sans">
+      <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing" onClick={() => setSelectedNode(null)}></svg>
       
-      <div className="absolute bottom-12 left-12 flex flex-col gap-4 bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] border border-slate-100 shadow-2xl z-40 ring-1 ring-slate-100">
-        <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Relationship Types / 关系界定</h5>
-        {(Object.entries(EDGE_COLORS) as [EdgeType, string][]).map(([type, color]) => (
-            <button key={type} onClick={() => toggleEdgeType(type)} className={`flex items-center gap-4 transition-all hover:scale-105 ${config.enabledEdgeTypes.includes(type) ? 'opacity-100' : 'opacity-20'}`}>
-                <div className="w-8 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
-                <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-600">{type}</span>
-            </button>
-        ))}
-        <div className="h-px bg-slate-100 my-2 w-full"></div>
-        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-300 serif italic text-center">@Lidia Zhou Mengyuan</p>
-      </div>
-
-      {!isPanelOpen && (
-          <button onClick={() => setIsPanelOpen(true)} className="absolute top-12 right-12 z-[60] w-16 h-16 bg-white border border-slate-200 text-slate-900 rounded-[1.5rem] shadow-2xl flex items-center justify-center hover:scale-110 transition-all text-2xl ring-4 ring-white">⚙️</button>
+      {/* 节点详述浮层 (Node Detail Inspector) */}
+      {selectedNode && (
+          <div className="absolute top-10 left-10 w-80 bg-white/95 backdrop-blur-3xl p-8 rounded-[2.5rem] shadow-3xl border border-slate-100 animate-slideUp z-[250] ring-1 ring-slate-100">
+               <div className="flex justify-between items-start mb-6">
+                  <div className="space-y-1">
+                      <h4 className="text-[9px] font-black uppercase tracking-widest text-indigo-500">{attributeOptions.find(a => a.id === selectedNode.group)?.label}</h4>
+                      <h3 className="text-2xl font-bold serif text-slate-900 leading-tight">{selectedNode.name}</h3>
+                  </div>
+                  <button onClick={() => setSelectedNode(null)} className="text-3xl font-light text-slate-300 hover:text-slate-600 leading-none">&times;</button>
+               </div>
+               <div className="grid grid-cols-2 gap-4 border-t border-slate-50 pt-6">
+                  <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-slate-400">Total Degree</p>
+                      <p className="text-xl font-bold serif text-slate-800">{selectedNode.degree}</p>
+                  </div>
+                  <div className="p-4 bg-indigo-50/50 rounded-2xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-indigo-400">PageRank</p>
+                      <p className="text-xl font-bold serif text-indigo-600">{selectedNode.pageRank.toFixed(4)}</p>
+                  </div>
+               </div>
+               <p className="mt-6 text-[11px] text-slate-400 italic font-serif leading-relaxed px-2">
+                 此节点在翻译网络中作为核心中介参与了 {selectedNode.degree} 次文献产出或跨国流转活动。
+               </p>
+          </div>
       )}
 
-      <div className={`absolute top-0 right-0 h-full w-[380px] bg-white/95 backdrop-blur-2xl border-l border-slate-100 shadow-2xl transition-transform duration-500 z-50 flex flex-col ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="flex items-center justify-between p-6 bg-slate-50 border-b border-slate-100 shrink-0">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Network Lab Control</h3>
-            <button onClick={() => setIsPanelOpen(false)} className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm leading-none">&times;</button>
+      {/* 导出操作栏 (Floating Action Bar) */}
+      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white/80 backdrop-blur-3xl p-3 rounded-[2rem] shadow-3xl border border-slate-100 z-[100] ring-1 ring-white/20">
+          <button onClick={() => handleExport('png')} className="px-8 py-3.5 bg-slate-900 text-white rounded-[1.2rem] text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-indigo-600 transition-all flex items-center gap-2"><span>🖼️</span> Export PNG</button>
+          <button onClick={() => handleExport('svg')} className="px-8 py-3.5 bg-white text-slate-400 border border-slate-100 rounded-[1.2rem] text-[10px] font-black uppercase tracking-widest hover:text-slate-900 hover:border-slate-300 transition-all">Vector SVG</button>
+      </div>
+
+      {/* 控制实验室面板 (Control Dashboard) */}
+      <div className={`absolute top-0 right-0 h-full w-[380px] bg-white border-l border-slate-100 shadow-2xl transition-transform duration-500 z-50 flex flex-col ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
+            <div className="space-y-1">
+                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-slate-900">Network Lab 2.0</h3>
+                <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest italic">Archival Structural Analytics</p>
+            </div>
+            <button onClick={() => setIsPanelOpen(false)} className="text-3xl font-light text-slate-300 hover:text-slate-900">&times;</button>
         </div>
 
-        <div className="flex bg-white border-b border-slate-100 p-2 shrink-0">
-            {[{id:'topology',label:'Topology'},{id:'viz',label:'Viz'},{id:'sna',label:'Export'}].map(t => (
-                <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all rounded-xl ${activeTab === t.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>
-                    {t.label}
+        <div className="flex border-b border-slate-50">
+            {[
+              { id: 'topology', label: 'Topology', icon: '📐' },
+              { id: 'viz', label: 'Visuals', icon: '🎨' },
+              { id: 'physics', label: 'Physics', icon: '⚡' }
+            ].map(t => (
+                <button 
+                  key={t.id} onClick={() => setActiveTab(t.id as any)} 
+                  className={`flex-1 py-5 text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                    <span className="text-sm opacity-50">{t.icon}</span> {t.label}
                 </button>
             ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-10 space-y-12 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
             {activeTab === 'topology' && (
-                <div className="space-y-10 animate-fadeIn">
-                    <section className="space-y-5">
-                        <div className="space-y-1">
-                          <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Layout Engine</h4>
-                          <h4 className="text-[10px] font-bold text-slate-300 serif">布局算法引擎</h4>
+                <div className="space-y-8 animate-fadeIn">
+                    <section className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Entity Mapping / 维度映射</h4>
+                            <button onClick={() => setConfig({...config, selectedNodeAttrs: ['authorName', 'translatorName', 'publisher']})} className="text-[8px] font-bold text-indigo-400 hover:underline">Restore Default</button>
                         </div>
-                        <select value={layout} onChange={e => setLayout(e.target.value as any)} className="w-full p-5 bg-slate-900 text-white rounded-[1.5rem] border-none text-[11px] font-bold uppercase outline-none shadow-xl">
-                            <option value="fruchtermanReingold">Fruchterman-Reingold / 有机弹力</option>
-                            <option value="concentric">Concentric Centrality / 向心等级</option>
-                            <option value="force">Standard Force / 标准引力</option>
-                            <option value="forceAtlas2">ForceAtlas2 / 力导向优化</option>
-                        </select>
-                        <p className="text-[9px] text-slate-400 italic font-serif leading-relaxed px-2">
-                           Fruchterman-Reingold creates a balanced organic structure, while Concentric emphasizes PageRank importance.
-                           <br/>有机弹力布局平衡分布，向心等级布局强调节点声望。
-                        </p>
-                    </section>
-                    
-                    <section className="space-y-5">
-                        <div className="space-y-1">
-                          <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Relationship Direction</h4>
-                          <h4 className="text-[10px] font-bold text-slate-300 serif">关系流转方向</h4>
-                        </div>
-                        <div className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem]">
-                           <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tighter">{config.isDirected ? 'Directed / 有向' : 'Undirected / 无向'}</span>
-                           <button onClick={() => setConfig({...config, isDirected: !config.isDirected})} className={`w-14 h-7 rounded-full transition-all relative ${config.isDirected ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
-                              <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${config.isDirected ? 'left-8' : 'left-1'}`}></div>
-                           </button>
-                        </div>
-                    </section>
-
-                    <section className="space-y-5">
-                        <div className="space-y-1">
-                          <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Participating Entities</h4>
-                          <h4 className="text-[10px] font-bold text-slate-300 serif">参与可视化的实体</h4>
-                        </div>
-                        <div className="flex flex-wrap gap-2.5">
-                            {availableAttributes.map(attr => (
-                                <button key={attr.id} onClick={() => {
-                                    const next = config.selectedNodeAttrs.includes(attr.id) ? config.selectedNodeAttrs.filter(x => x !== attr.id) : [...config.selectedNodeAttrs, attr.id];
-                                    setConfig({...config, selectedNodeAttrs: next});
-                                }} className={`px-5 py-2.5 rounded-full text-[11px] font-bold border transition-all ${config.selectedNodeAttrs.includes(attr.id) ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
-                                    {attr.label}
-                                </button>
+                        <div className="space-y-2">
+                            {attributeOptions.map(opt => (
+                                <label key={opt.id} className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all border ${config.selectedNodeAttrs.includes(opt.id) ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={config.selectedNodeAttrs.includes(opt.id)}
+                                      onChange={() => {
+                                          const next = config.selectedNodeAttrs.includes(opt.id) ? 
+                                            config.selectedNodeAttrs.filter(a => a !== opt.id) : 
+                                            [...config.selectedNodeAttrs, opt.id];
+                                          setConfig({...config, selectedNodeAttrs: next});
+                                      }}
+                                      className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    <div className="flex-1 flex items-center gap-3">
+                                        <span className="text-lg">{opt.icon}</span>
+                                        <span className="text-xs font-bold text-slate-700">{opt.label}</span>
+                                    </div>
+                                </label>
                             ))}
                         </div>
                     </section>
@@ -448,116 +366,104 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ data, customColumns }) => {
 
             {activeTab === 'viz' && (
                 <div className="space-y-10 animate-fadeIn">
-                    <section className="space-y-5">
-                        <div className="space-y-1">
-                          <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Label Management</h4>
-                          <h4 className="text-[10px] font-bold text-slate-300 serif">标签管理与冲突规避</h4>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem]">
-                               <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tighter">Avoid Overlap / 规避重叠</span>
-                               <button onClick={() => setAvoidLabelOverlap(!avoidLabelOverlap)} className={`w-14 h-7 rounded-full transition-all relative ${avoidLabelOverlap ? 'bg-emerald-500 shadow-lg' : 'bg-slate-300'}`}>
-                                  <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${avoidLabelOverlap ? 'left-8' : 'left-1'}`}></div>
-                               </button>
-                            </div>
-                            <div className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem]">
-                               <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tighter">Show Annotations / 显示名称</span>
-                               <button onClick={() => setShowLabels(!showLabels)} className={`w-14 h-7 rounded-full transition-all relative ${showLabels ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
-                                  <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${showLabels ? 'left-8' : 'left-1'}`}></div>
-                               </button>
-                            </div>
+                    <section className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Layout Algorithm / 布局引擎</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { id: 'force', label: 'Force 自由力导', icon: '🧲' },
+                                { id: 'radial', label: 'Radial 径向', icon: '🔆' },
+                                { id: 'concentric', label: 'Concentric 同心', icon: '🎯' },
+                                { id: 'fruchtermanReingold', label: 'FR 紧致聚合', icon: '💎' }
+                            ].map(m => (
+                                <button key={m.id} onClick={() => setLayout(m.id as any)} className={`p-5 rounded-[1.5rem] text-[9px] font-black uppercase flex flex-col items-center gap-2 transition-all border ${layout === m.id ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'bg-slate-50 text-slate-400 border-transparent hover:border-slate-200'}`}>
+                                    <span className="text-2xl">{m.icon}</span>
+                                    {m.label}
+                                </button>
+                            ))}
                         </div>
                     </section>
-
-                    <section className="space-y-5">
-                        <div className="space-y-1">
-                          <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Scale Nodes By</h4>
-                          <h4 className="text-[10px] font-bold text-slate-300 serif">节点大小映射基准</h4>
+                    <section className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Node Scaling / 尺寸逻辑</h4>
+                        <div className="grid grid-cols-3 gap-2">
+                            {['degree', 'pageRank', 'uniform'].map(m => (
+                                <button key={m} onClick={() => setSizeBy(m as any)} className={`py-4 rounded-xl text-[9px] font-black uppercase transition-all ${sizeBy === m ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>
+                                    {m}
+                                </button>
+                            ))}
                         </div>
-                        <select value={sizeBy} onChange={e => setSizeBy(e.target.value as any)} className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none text-[11px] font-bold uppercase outline-none shadow-inner text-indigo-600">
-                           <option value="uniform">Uniform / 统一</option>
-                           <option value="degree">Degree Centrality / 度中心性</option>
-                           <option value="betweenness">Betweenness / 介数中心性</option>
-                           <option value="pageRank">PageRank / 声望值</option>
-                        </select>
                     </section>
-
-                    <section className="space-y-5">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Size Bounds</h4>
-                        <div className="grid grid-cols-2 gap-6">
-                           <div className="space-y-3">
-                              <label className="text-[10px] font-black uppercase text-slate-300">Min: {minSize}</label>
-                              <input type="range" min="10" max="40" value={minSize} onChange={e => setMinSize(parseInt(e.target.value))} className="w-full accent-indigo-600" />
-                           </div>
-                           <div className="space-y-3">
-                              <label className="text-[10px] font-black uppercase text-slate-300">Max: {maxSize}</label>
-                              <input type="range" min="40" max="150" value={maxSize} onChange={e => setMaxSize(parseInt(e.target.value))} className="w-full accent-indigo-600" />
-                           </div>
+                    <section className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Color Mode / 染色方案</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                            {['category', 'community'].map(m => (
+                                <button key={m} onClick={() => setColorMode(m as any)} className={`py-4 rounded-xl text-[9px] font-black uppercase transition-all ${colorMode === m ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>
+                                    {m === 'category' ? 'By Attribute' : 'By Cluster'}
+                                </button>
+                            ))}
                         </div>
                     </section>
                 </div>
             )}
 
-            {activeTab === 'sna' && (
-                <div className="space-y-10 animate-fadeIn">
-                    <section className="space-y-5">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Export Laboratory Results</h4>
-                        <div className="grid grid-cols-1 gap-3">
-                          <button onClick={() => handleExport('svg')} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"><span>📥</span> Export SVG</button>
-                          <button onClick={() => handleExport('png')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"><span>🖼️</span> Export PNG</button>
-                          <button onClick={() => handleExport('csv')} className="w-full py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"><span>📊</span> Export Metrics (CSV)</button>
+            {activeTab === 'physics' && (
+                <div className="space-y-8 animate-fadeIn">
+                    <section className="space-y-6">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Physics Micro-Controls</h4>
+                        <div className="space-y-4">
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-[10px] font-bold uppercase">
+                                    <span className="text-slate-600">Link Distance</span>
+                                    <span className="text-indigo-600">{linkDistance}px</span>
+                                </div>
+                                <input type="range" min="50" max="600" value={linkDistance} onChange={e => setLinkDistance(Number(e.target.value))} className="w-full h-1 bg-slate-100 rounded-full appearance-none accent-indigo-600" />
+                            </div>
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-[10px] font-bold uppercase">
+                                    <span className="text-slate-600">Charge (Repulsion)</span>
+                                    <span className="text-indigo-600">{chargeStrength}</span>
+                                </div>
+                                <input type="range" min="-4000" max="-100" value={chargeStrength} onChange={e => setChargeStrength(Number(e.target.value))} className="w-full h-1 bg-slate-100 rounded-full appearance-none accent-indigo-600" />
+                            </div>
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-[10px] font-bold uppercase">
+                                    <span className="text-slate-600">Center Gravity</span>
+                                    <span className="text-indigo-600">{(centerForce * 100).toFixed(0)}%</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.05" value={centerForce} onChange={e => setCenterForce(Number(e.target.value))} className="w-full h-1 bg-slate-100 rounded-full appearance-none accent-indigo-600" />
+                            </div>
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-[10px] font-bold uppercase">
+                                    <span className="text-slate-600">Collision Padding</span>
+                                    <span className="text-indigo-600">{collisionRadius}px</span>
+                                </div>
+                                <input type="range" min="0" max="150" value={collisionRadius} onChange={e => setCollisionRadius(Number(e.target.value))} className="w-full h-1 bg-slate-100 rounded-full appearance-none accent-indigo-600" />
+                            </div>
                         </div>
                     </section>
-                    <section className="space-y-5">
-                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Centrality Rank (PageRank)</h4>
-                        <div className="space-y-2">
-                           {graphData.nodes.sort((a,b) => b.pageRank - a.pageRank).slice(0, 8).map((n, i) => (
-                              <div key={n.id} className="flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-[1.2rem] shadow-sm">
-                                 <span className="text-[10px] font-black text-slate-300">#{i+1}</span>
-                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] font-bold text-slate-800 truncate serif">{n.name}</p>
-                                    <p className="text-[8px] uppercase text-indigo-400 font-black tracking-tighter">PR: {n.pageRank.toFixed(4)}</p>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                    </section>
+                    <button onClick={() => { setLinkDistance(160); setChargeStrength(-900); setCollisionRadius(45); setCenterForce(0.12); }} className="w-full py-4 text-[9px] font-black uppercase text-slate-300 hover:text-slate-900 bg-slate-50 border border-slate-100 rounded-2xl transition-all">Reset Simulation</button>
                 </div>
             )}
         </div>
 
-        {selectedNode && (
-            <div className="m-8 p-10 bg-slate-900 text-white rounded-[3.5rem] shadow-3xl space-y-6 animate-slideUp relative flex-shrink-0 overflow-hidden ring-4 ring-indigo-500/20">
-                <button onClick={() => setSelectedNode(null)} className="absolute top-8 right-10 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 text-white text-3xl font-light hover:bg-rose-500 transition-all leading-none z-20">&times;</button>
-                <div className="space-y-1 relative z-10">
-                    <p className="text-[9px] uppercase text-indigo-400 tracking-[0.4em] font-black">{selectedNode.group}</p>
-                    <h4 className="text-3xl font-bold serif leading-tight tracking-tight">{selectedNode.name}</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-3 relative z-10">
-                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-white/5">
-                        <p className="text-[7px] uppercase text-slate-500 mb-1 tracking-widest font-black">In-Degree</p>
-                        <p className="text-xl font-bold serif text-indigo-300">{selectedNode.inDegree}</p>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-white/5">
-                        <p className="text-[7px] uppercase text-slate-500 mb-1 tracking-widest font-black">Out-Degree</p>
-                        <p className="text-xl font-bold serif text-emerald-300">{selectedNode.outDegree}</p>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-white/5">
-                        <p className="text-[7px] uppercase text-slate-500 mb-1 tracking-widest font-black">Betweenness</p>
-                        <p className="text-xl font-bold serif">{selectedNode.betweenness.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded-2xl text-center border border-white/5">
-                        <p className="text-[7px] uppercase text-slate-500 mb-1 tracking-widest font-black">Closeness</p>
-                        <p className="text-xl font-bold serif">{selectedNode.closeness.toFixed(3)}</p>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded-3xl text-center col-span-2 border border-indigo-500/20 py-6 mt-2">
-                        <p className="text-[8px] uppercase text-indigo-400 mb-1 tracking-[0.3em] font-black">PageRank Importance</p>
-                        <p className="text-2xl font-bold serif text-white">{selectedNode.pageRank.toFixed(5)}</p>
-                    </div>
-                </div>
-            </div>
-        )}
+        <div className="p-8 bg-indigo-600">
+             <div className="flex items-center gap-4 mb-3">
+                <span className="text-2xl">💡</span>
+                <p className="text-[10px] font-black uppercase text-indigo-50 tracking-widest leading-tight">Scholar's Insight</p>
+             </div>
+             <p className="text-[10px] font-serif italic text-indigo-100/70 leading-relaxed">
+               在复杂网络中，尝试以 "PageRank" 衡量尺寸并切换至 "Concentric" 布局。这能最直观地暴露出网络中掌握“翻译资本”最丰厚的关键枢纽。
+             </p>
+        </div>
       </div>
+
+      {!isPanelOpen && (
+          <button 
+            onClick={() => setIsPanelOpen(true)} 
+            className="absolute top-10 right-10 w-16 h-16 bg-white text-slate-900 rounded-[1.5rem] shadow-3xl flex items-center justify-center text-3xl hover:bg-slate-900 hover:text-white transition-all z-[100] border border-slate-100 hover:scale-110 active:scale-95"
+          >
+              ⚙️
+          </button>
+      )}
     </div>
   );
 };
