@@ -6,7 +6,7 @@
 [![Gemini API](https://img.shields.io/badge/AI-Gemini%203%20Pro-blueviolet)](https://ai.google.dev/)
 [![D3.js](https://img.shields.io/badge/Visualization-D3.js-orange)](https://d3js.org/)
 
-**[在线预览项目](https://translation-data-manager.vercel.app/​)**
+**[在线预览项目](https://translation-data-manager.vercel.app)**
 
 </div>
 
